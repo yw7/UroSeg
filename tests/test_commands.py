@@ -100,3 +100,30 @@ def test_resample_cli(img_file, tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert (out / 'img_resampled.nii.gz').exists()
+
+
+# ── reorient ──────────────────────────────────────────────────────────────────
+
+def test_reorient_produces_output(img_file, tmp_path):
+    from uroseg.commands.reorient_canonical import process_one
+    import argparse
+    out = tmp_path / 'reoriented.nii.gz'
+    args = argparse.Namespace(orientation='RAS', overwrite=True)
+    process_one((img_file, out), args)
+    assert out.exists()
+    img = Image.load(out)
+    assert img.data.ndim == 3
+
+
+def test_reorient_cli(img_file, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'reorient',
+         '--img', str(img_file), '--out', str(out),
+         '--orientation', 'RAS', '--out-suffix', '_ras'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_ras.nii.gz').exists()
