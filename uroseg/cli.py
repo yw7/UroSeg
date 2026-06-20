@@ -17,7 +17,8 @@ def main() -> None:
     cmd = sys.argv[1]
 
     if cmd == 'list':
-        _cmd_list()
+        from uroseg.commands.list_models import main as run
+        run()
     elif cmd == 'install':
         sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.install import main as run
@@ -67,17 +68,6 @@ def main() -> None:
         sys.exit(1)
     else:
         _dispatch_organ(cmd)
-
-
-def _cmd_list() -> None:
-    from uroseg.utils.utils import get_all_models
-    models = get_all_models()
-    print(f"{'Model':<22} {'Description'}")
-    print('-' * 70)
-    for name, m in sorted(models.items()):
-        labels = ', '.join(f"{k}={v}" for k, v in m['labels'].items() if k != '0')
-        print(f"  uroseg {name:<16} {m['description']}")
-        print(f"  {'':16}   labels: {labels}")
 
 
 def _dispatch_organ(organ: str) -> None:

@@ -18,6 +18,14 @@ def test_list_shows_models():
     assert 'bladder' in result.stdout
 
 
+def test_list_prints_model_names(capsys):
+    from uroseg.commands.list_models import main
+    main()
+    out = capsys.readouterr().out
+    assert 'prostate' in out
+    assert 'bladder' in out
+
+
 def test_no_args_exits_nonzero():
     result = run_uroseg()
     assert result.returncode != 0
