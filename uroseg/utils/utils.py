@@ -74,6 +74,36 @@ def get_model(name: str) -> dict:
         )
 
 
+def normalize_labels(raw: dict) -> dict:
+    """Normalize model JSON label dicts to ``{name: int | list[int]}``.
+
+    Accepts four input formats:
+    - TotalSpineSeg style (name→value): ``{"background": 0, "disc": [1,2,3]}``
+    - Old integer-key style: ``{"0": "background", "1": "prostate"}``
+    - Comma-key style: ``{"1,2,3": "prostate", "2": "pz"}``
+    - Range-key style: ``{"1-3": "prostate", "2": "pz"}``
+    """
+    result: dict = {}
+    for k, v in raw.items():
+        if isinstance(v, (int, list)):
+            # TotalSpineSeg format — key is the label name
+            result[str(k)] = v
+        elif isinstance(v, str):
+            # Old/compact format — key encodes label value(s), value is the name
+            name = v
+            k_str = str(k)
+            if ',' in k_str:
+                values = [int(x.strip()) for x in k_str.split(',')]
+                result[name] = values if len(values) > 1 else values[0]
+            elif '-' in k_str and not k_str.startswith('-'):
+                start_s, end_s = k_str.split('-', 1)
+                values = list(range(int(start_s), int(end_s) + 1))
+                result[name] = values if len(values) > 1 else values[0]
+            else:
+                result[name] = int(k_str)
+    return result
+
+
 def get_all_models() -> dict[str, dict]:
     models_dir = files('uroseg.resources.models')
     return {

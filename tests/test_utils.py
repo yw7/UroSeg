@@ -87,15 +87,16 @@ def test_get_model_prostate():
     assert model['name'] == 'prostate'
     assert 'labels' in model
     assert 'nnunet_task' in model
-    assert 'channel_names' in model
-    assert 'regions_class_order' in model
+    assert 'channel_names' not in model       # removed from model JSON
+    assert 'background' in model['labels']    # new canonical format
+    assert isinstance(model['labels']['prostate'], list)  # region
 
 
 def test_get_model_bladder():
     model = get_model('bladder')
     assert model['name'] == 'bladder'
-    assert '1' in model['labels']
-    assert 'regions_class_order' not in model
+    assert 'bladder' in model['labels']       # new canonical format
+    assert 'channel_names' not in model
 
 
 def test_get_model_unknown():

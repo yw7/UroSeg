@@ -22,10 +22,13 @@ def prostate_model():
         "name": "prostate",
         "description": "Prostate MRI-T2",
         "nnunet_task": "Dataset001_Prostate",
-        "channel_names": {"0": "MRI-T2"},
-        "labels": {"0": "background", "1": "prostate", "2": "prostate_pz",
-                   "3": "prostate_cz", "4": "prostate_afs"},
-        "regions_class_order": [1, 2, 3, 4],
+        "labels": {
+            "background": 0,
+            "prostate": [1, 2, 3, 4],
+            "prostate_pz": 2,
+            "prostate_cz": 3,
+            "prostate_afs": 4,
+        },
     }
 
 
@@ -35,8 +38,7 @@ def bladder_model():
         "name": "bladder",
         "description": "Urinary bladder (CT)",
         "nnunet_task": "Dataset010_Bladder",
-        "channel_names": {"0": "CT"},
-        "labels": {"0": "background", "1": "bladder"},
+        "labels": {"background": 0, "bladder": 1},
     }
 
 
@@ -48,6 +50,46 @@ def images_tr_dir(tmp_path):
         data = np.zeros((10, 10, 10), dtype=np.int16)
         nib.save(nib.Nifti1Image(data, np.eye(4)), d / f"case_{i:03d}_0000.nii.gz")
     return d
+
+
+# ── normalize_labels ─────────────────────────────────────────────────────────
+
+def test_normalize_labels_canonical_passthrough():
+    from uroseg.utils.utils import normalize_labels
+    inp = {"background": 0, "disc": [1, 2, 3], "disc_C2_C3": 2}
+    assert normalize_labels(inp) == inp
+
+
+def test_normalize_labels_old_int_key_format():
+    from uroseg.utils.utils import normalize_labels
+    result = normalize_labels({"0": "background", "1": "prostate", "2": "pz"})
+    assert result == {"background": 0, "prostate": 1, "pz": 2}
+
+
+def test_normalize_labels_comma_key():
+    from uroseg.utils.utils import normalize_labels
+    result = normalize_labels({"1,2,3": "prostate", "2": "pz"})
+    assert result["prostate"] == [1, 2, 3]
+    assert result["pz"] == 2
+
+
+def test_normalize_labels_range_key():
+    from uroseg.utils.utils import normalize_labels
+    result = normalize_labels({"1-4": "disc", "2": "C2_C3"})
+    assert result["disc"] == [1, 2, 3, 4]
+    assert result["C2_C3"] == 2
+
+
+def test_normalize_labels_mixed_formats():
+    from uroseg.utils.utils import normalize_labels
+    result = normalize_labels({
+        "background": 0,
+        "prostate": [1, 2, 3, 4],
+        "prostate_pz": 2,
+    })
+    assert result["background"] == 0
+    assert result["prostate"] == [1, 2, 3, 4]
+    assert result["prostate_pz"] == 2
 
 
 # ── extract_dataset_id ────────────────────────────────────────────────────────
@@ -70,8 +112,8 @@ def test_extract_dataset_id_raises_on_bad_format():
 def test_generate_dataset_json_simple(bladder_model, images_tr_dir):
     from uroseg.commands.train import generate_dataset_json
     result = generate_dataset_json(bladder_model, images_tr_dir)
-    assert result["channel_names"] == {"0": "CT"}
-    assert result["labels"] == {"0": "background", "1": "bladder"}
+    assert result["channel_names"] == {"0": "MRI"}
+    assert result["labels"] == {"background": 0, "bladder": 1}
     assert result["numTraining"] == 3
     assert result["file_ending"] == ".nii.gz"
     assert "regions_class_order" not in result
@@ -81,7 +123,7 @@ def test_generate_dataset_json_with_regions(prostate_model, images_tr_dir):
     from uroseg.commands.train import generate_dataset_json
     result = generate_dataset_json(prostate_model, images_tr_dir)
     assert result["regions_class_order"] == [1, 2, 3, 4]
-    assert result["channel_names"] == {"0": "MRI-T2"}
+    assert result["channel_names"] == {"0": "MRI"}
 
 
 # ── setup_nnunet_env ──────────────────────────────────────────────────────────
@@ -118,9 +160,7 @@ def test_train_generates_dataset_json(tmp_path):
         mock_get_model.return_value = {
             "name": "prostate",
             "nnunet_task": "Dataset001_Prostate",
-            "channel_names": {"0": "MRI-T2"},
-            "labels": {"0": "background", "1": "prostate"},
-            "regions_class_order": [1],
+            "labels": {"background": 0, "prostate": [1], "prostate_sub": 1},
         }
         mock_run.return_value = None
 
@@ -136,7 +176,7 @@ def test_train_generates_dataset_json(tmp_path):
     with open(dataset_json_path) as f:
         data = json.load(f)
     assert data["numTraining"] == 2
-    assert data["regions_class_order"] == [1]
+    assert data["regions_class_order"] == [1]  # prostate: [1] triggers regions
     assert data["file_ending"] == ".nii.gz"
 
 
@@ -160,8 +200,7 @@ def test_train_calls_nnunet_train(tmp_path):
         mock_get_model.return_value = {
             "name": "bladder",
             "nnunet_task": "Dataset010_Bladder",
-            "channel_names": {"0": "CT"},
-            "labels": {"0": "background", "1": "bladder"},
+            "labels": {"background": 0, "bladder": 1},
         }
         mock_run.return_value = None
 
@@ -203,8 +242,7 @@ def test_train_skips_preprocess_if_done(tmp_path):
         mock_get_model.return_value = {
             "name": "bladder",
             "nnunet_task": "Dataset010_Bladder",
-            "channel_names": {"0": "CT"},
-            "labels": {"0": "background", "1": "bladder"},
+            "labels": {"background": 0, "bladder": 1},
         }
         mock_run.return_value = None
 
@@ -248,8 +286,7 @@ def test_train_sets_auglab_config_env(tmp_path):
         mock_get_model.return_value = {
             "name": "bladder",
             "nnunet_task": "Dataset010_Bladder",
-            "channel_names": {"0": "CT"},
-            "labels": {"0": "background", "1": "bladder"},
+            "labels": {"background": 0, "bladder": 1},
         }
 
         import sys
@@ -270,8 +307,7 @@ def test_train_fails_when_no_images_tr(tmp_path):
         mock_get_model.return_value = {
             "name": "bladder",
             "nnunet_task": "Dataset010_Bladder",
-            "channel_names": {"0": "CT"},
-            "labels": {"0": "background", "1": "bladder"},
+            "labels": {"background": 0, "bladder": 1},
         }
 
         import sys

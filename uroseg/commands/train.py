@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import uroseg.utils.utils as _utils
+from uroseg.utils.utils import normalize_labels
 
 
 def extract_dataset_id(nnunet_task: str) -> int:
@@ -18,14 +19,26 @@ def extract_dataset_id(nnunet_task: str) -> int:
 
 
 def generate_dataset_json(model: dict, images_tr_dir: Path) -> dict:
+    labels = normalize_labels(model["labels"])
+
+    # Collect all unique non-zero label integers; detect if any are regions (lists)
+    all_values: set[int] = set()
+    has_regions = False
+    for v in labels.values():
+        if isinstance(v, list):
+            all_values.update(int(x) for x in v)
+            has_regions = True
+        elif int(v) != 0:
+            all_values.add(int(v))
+
     dataset: dict = {
-        "channel_names": model["channel_names"],
-        "labels": model["labels"],
+        "channel_names": {"0": "MRI"},
+        "labels": labels,
         "numTraining": len(list(images_tr_dir.glob("*.nii.gz"))),
         "file_ending": ".nii.gz",
     }
-    if "regions_class_order" in model:
-        dataset["regions_class_order"] = model["regions_class_order"]
+    if has_regions:
+        dataset["regions_class_order"] = sorted(all_values)
     return dataset
 
 
