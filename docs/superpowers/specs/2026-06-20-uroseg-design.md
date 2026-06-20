@@ -307,7 +307,7 @@ uroseg train \
 
 ### Steps executed internally
 1. Load `resources/models/<organ>.json`
-2. Resolve `data_path` via `--data-dir` → `UROSEG_DATA` → package default
+2. Resolve `data_path` via `--data-dir` → `UROSEG_DATA` → `~/.uroseg/` (default)
 3. Set `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars from `data_path` automatically
 4. Auto-generate `data_path/nnUNet/raw/<nnunet_task>/dataset.json` from the model JSON (`channel_names`, `labels`, `regions_class_order` if present, num_training from `imagesTr/` count)
 5. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
@@ -321,7 +321,7 @@ UroSeg uses a single `data_path` root for all nnU-Net data, resolved in this pri
 
 1. `--data-dir` CLI argument (highest priority)
 2. `UROSEG_DATA` environment variable
-3. Package directory via `importlib.resources` (default, ships with package)
+3. `~/.uroseg/` (default)
 
 The directory layout under `data_path`:
 ```
