@@ -87,34 +87,67 @@ uroseg bladder  --img input/ --out output/
 
 ## Model Registry
 
-Each organ model is a JSON file in `uroseg/resources/models/`:
+Each organ model is a JSON file in `uroseg/resources/models/`. Models support a single step (one nnU-Net model, multiple labels) or multiple cascaded steps (coarse → fine, where later steps receive earlier steps' output as an additional input channel).
 
+### Single-step model
+Used when one model segments all labels directly:
 ```json
 {
-  "name": "prostate",
-  "description": "Prostate zones: peripheral zone (PZ), central zone (CZ), anterior fibromuscular stroma (AFS)",
-  "modality": "MRI-T2",
-  "nnunet_task": "Dataset001_Prostate",
-  "labels": {
-    "1": "prostate_pz",
-    "2": "prostate_cz",
-    "3": "prostate_afs"
-  },
-  "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
+  "name": "bladder",
+  "description": "Urinary bladder",
+  "steps": [
+    {
+      "nnunet_task": "Dataset010_Bladder",
+      "modality": ["CT"],
+      "labels": {"1": "bladder"},
+      "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
+    }
+  ]
 }
 ```
 
-Fields:
-- `name` — matches the filename stem and the CLI subcommand token
-- `modality` — channel names passed to nnU-Net's `dataset.json` (e.g. `["MRI-T2"]`); used by `uroseg train` to auto-generate `dataset.json`
-- `nnunet_task` — nnU-Net dataset folder name, e.g. `Dataset001_Prostate`
-- `labels` — label ID → anatomical name mapping; used to auto-generate `dataset.json` and for `uroseg map`
-- `weights_url` — full GitHub Release zip URL (optional; omit for community/unreleased models); the release ID (e.g. `r20260101`) is extracted from the URL at runtime to determine the results subdirectory
+### Multi-step (cascaded) model
+Used when subclass segmentation benefits from first segmenting the parent structure. Each step after the first receives the previous step's segmentation as an additional input channel alongside the original image:
+```json
+{
+  "name": "prostate",
+  "description": "Prostate and zones: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
+  "steps": [
+    {
+      "nnunet_task": "Dataset001_Prostate",
+      "modality": ["MRI-T2"],
+      "labels": {"1": "prostate"},
+      "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
+    },
+    {
+      "nnunet_task": "Dataset002_Prostate_zones",
+      "modality": ["MRI-T2"],
+      "labels": {"2": "prostate_pz", "3": "prostate_cz", "4": "prostate_afs"},
+      "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset002_Prostate_zones_r20260101.zip",
+      "input_from_step": 0
+    }
+  ]
+}
+```
+
+`input_from_step` (integer, optional) — index of the step whose output seg is concatenated as an additional input channel for this step's nnU-Net model. This is how nnU-Net's cascade works: step 2 sees both the original image and step 1's segmentation.
+
+### Fields (per step)
+- `nnunet_task` — nnU-Net dataset folder name; used for predict, train, and install
+- `modality` — list of channel names for nnU-Net's `dataset.json` (index 0 = image, index 1 = previous step seg if `input_from_step` set)
+- `labels` — label ID → anatomical name; used to auto-generate `dataset.json` and for `uroseg map`
+- `weights_url` — full GitHub Release zip URL (optional; omit for community/unreleased models); release ID extracted from URL determines results subdirectory
+- `input_from_step` — (optional) index of prior step whose seg is passed as extra input channel
+
+### Top-level fields
+- `name` — matches filename stem and CLI subcommand token
+- `description` — human-readable summary including all labels across all steps
+- `steps` — ordered list; inference runs them in order, passing outputs forward
 
 **Training workflow — model JSON first:**
-The user creates `resources/models/<organ>.json` before training. `uroseg train` reads it and auto-generates the nnU-Net `dataset.json` (label map, channel names, num_training) so the user never writes `dataset.json` by hand. The user only needs to place raw images and segmentations in the `imagesTr/` and `labelsTr/` directories.
+The user creates `resources/models/<organ>.json` before training. `uroseg train --step N` trains one step at a time. It reads the step's fields and auto-generates `dataset.json` (labels, channel names, num_training from `imagesTr/` count). For steps with `input_from_step`, the user must first generate the previous step's predictions on the training set and place them in `imagesTr/` as an additional channel.
 
-Adding a new organ requires only: creating the model JSON, placing data, running `uroseg train`, and opening a PR.
+Adding a new organ: create the model JSON → train each step → open PR.
 
 ---
 
@@ -275,7 +308,7 @@ Python replacement for `scripts/train.sh`. Wraps nnU-Net with AugLab online augm
 ```
 uroseg train \
   --organ prostate \
-  --dataset DATASET_ID \
+  --step 0 \                            # which step to train (0-indexed); default: 0
   --fold N \
   [--auglab-config auglab.json] \
   [--gpus 1] \
@@ -283,14 +316,21 @@ uroseg train \
 ```
 
 ### Steps executed internally
-1. Load `resources/models/<organ>.json`
+1. Load `resources/models/<organ>.json`, select `steps[--step]`
 2. Resolve `data_path` via `--data-dir` → `UROSEG_DATA` → package default
 3. Set `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars from `data_path` automatically
-4. Auto-generate `data_path/nnUNet/raw/DatasetXXX/dataset.json` from the model JSON (labels, channel names, num_training from `imagesTr/` count)
+4. Auto-generate `data_path/nnUNet/raw/<nnunet_task>/dataset.json` from the step's fields (labels, channel names including prior step channel if `input_from_step` set, num_training from `imagesTr/` count)
 5. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
 6. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
 7. If `--auglab-config` is provided, set `AUGLAB_CONFIG` env var before invoking nnU-Net
 8. On completion, print the full results path where the trained model is stored
+
+For cascaded models, train each step separately in order:
+```bash
+uroseg train --organ prostate --step 0 --fold 0   # train whole-prostate model
+# generate step 0 predictions on training set, place as extra channel in imagesTr/
+uroseg train --organ prostate --step 1 --fold 0   # train zone model
+```
 
 ### Data directory & trained model storage
 
@@ -408,8 +448,8 @@ uroseg install --model prostate [--data-dir PATH] [--store-export]
 uroseg install --all            [--data-dir PATH] [--store-export]
 ```
 1. Loads model JSON(s) via `get_model()` / `get_all_models()`
-2. Reads `weights_url`; skips models without one (community/unreleased)
-3. Downloads zip to `data_path/nnUNet/exports/`
+2. Iterates over all `steps`; for each step reads `weights_url`; skips steps without one
+3. Downloads each step's zip to `data_path/nnUNet/exports/`
 4. Extracts release ID from URL, extracts zip to `data_path/nnUNet/results/<release_id>/`
 5. Removes zip unless `--store-export` is passed
 
@@ -420,17 +460,29 @@ Each GitHub release creates a date-stamped tag (e.g. `r20260101`), attaches zip 
 
 ## Inference Data Flow
 
+Single-step model:
 ```
-Input NIfTI(s)  (--img)
-  → collect_niftis()
-  → Image.load() → reorient to canonical (RAS)
-  → nnU-Net predict (predict_nnunet command, using resources/models/<organ>.json task ID)
-  → output seg NIfTI
-  → Image.load(seg) → apply label map from model JSON
-  → save to --out with --out-suffix
+--img input(s)
+  → collect_niftis() → Image.load() → reorient (RAS)
+  → nnU-Net predict (steps[0].nnunet_task)
+  → seg NIfTI with steps[0].labels
+  → save to --out
 ```
 
-Weights are checked on first inference call; auto-downloaded if missing (same pattern as TotalSpineSeg).
+Multi-step (cascaded) model:
+```
+--img input(s)
+  → collect_niftis() → Image.load() → reorient (RAS)
+  → nnU-Net predict (steps[0].nnunet_task)              # e.g. whole prostate, label 1
+  → step0_seg written to temp dir
+  → nnU-Net predict (steps[1].nnunet_task)              # e.g. zones, labels 2/3/4
+      input channels: [original_img, step0_seg]         # concatenated per input_from_step
+  → step1_seg written to temp dir
+  → merge all step segs into single output NIfTI        # label IDs from all steps combined
+  → save to --out
+```
+
+Weights for all steps are checked on first inference call; any missing are auto-downloaded before prediction begins.
 
 ---
 
