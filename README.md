@@ -55,9 +55,9 @@ By default, weights are stored in `~/uroseg/nnUNet/results/`. Override with `--d
 ### Inference
 
 ```bash
-# Single image
-uroseg prostate --img subject01_T2.nii.gz --out subject01_prostate.nii.gz
-uroseg bladder  --img subject01_CT.nii.gz  --out subject01_bladder.nii.gz
+# Single image — pass a folder as --out (output named automatically)
+uroseg prostate --img subject01_T2.nii.gz --out segs/
+uroseg bladder  --img subject01_CT.nii.gz  --out segs/
 
 # Batch (folder input → folder output)
 uroseg prostate --img /data/mri/ --out /data/segs/ --max-workers 4
@@ -67,26 +67,26 @@ uroseg prostate --img /data/mri/ --out /data/segs/ --max-workers 4
 
 ```bash
 # Remap label IDs using a JSON map {"src_id": dst_id}
-uroseg map --seg seg.nii.gz --out remapped.nii.gz --map labels.json
+uroseg map --seg seg.nii.gz --out remapped/ --map labels.json
 
 # Resample to 1×1×1 mm isotropic
-uroseg resample --img img.nii.gz --out img_1mm.nii.gz --spacing 1 1 1
+uroseg resample --img img.nii.gz --out img_1mm/ --spacing 1 1 1
 
 # Reorient to RAS canonical
-uroseg reorient --img img.nii.gz --out img_ras.nii.gz
+uroseg reorient --img img.nii.gz --out img_ras/
 
 # Keep only the largest connected component per label
-uroseg largest_component --seg seg.nii.gz --out seg_lc.nii.gz
+uroseg largest_component --seg seg.nii.gz --out seg_lc/
 
 # Crop image and seg to segmentation bounding box
 uroseg crop --img img.nii.gz --seg seg.nii.gz \
-            --out-img img_crop.nii.gz --out-seg seg_crop.nii.gz
+            --out-img img_crop/ --out-seg seg_crop/
 
 # Generate JPG preview (3 orthogonal slices, optional seg overlay)
-uroseg preview --img img.nii.gz --seg seg.nii.gz --out preview.jpg
+uroseg preview --img img.nii.gz --seg seg.nii.gz --out previews/
 
 # Resample segmentation to match reference image space (nearest-neighbour)
-uroseg transform_seg2image --seg seg.nii.gz --img ref.nii.gz --out-seg seg_transformed.nii.gz
+uroseg transform_seg2image --seg seg.nii.gz --img ref.nii.gz --out-seg seg_transformed/
 
 # Copy NIfTI files with optional renaming
 uroseg cpdir --img /data/mri/ --out /data/mri_copy/ --out-suffix _copy

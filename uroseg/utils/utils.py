@@ -60,7 +60,18 @@ def resolve_data_path(data_dir: str | None = None) -> Path:
 
 def get_model(name: str) -> dict:
     path = files('uroseg.resources.models').joinpath(f'{name}.json')
-    return json.loads(path.read_text())
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, KeyError, OSError):
+        available = ', '.join(sorted(
+            p.name.removesuffix('.json')
+            for p in files('uroseg.resources.models').iterdir()
+            if p.name.endswith('.json')
+        ))
+        raise ValueError(
+            f"Unknown model '{name}'. Available: {available}\n"
+            f"Run 'uroseg list' to see all models."
+        )
 
 
 def get_all_models() -> dict[str, dict]:
