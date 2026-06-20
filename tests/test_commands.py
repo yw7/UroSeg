@@ -58,6 +58,108 @@ def test_map_labels_unmapped_becomes_zero(seg_file, tmp_path):
     assert result[12, 12, 12] == 0
 
 
+def test_map_labels_keep_unmapped(seg_file, tmp_path):
+    from uroseg.commands.map_labels import apply_map
+    img = Image.load(seg_file)
+    # Only map label 1 -> 5; label 2 should be kept unchanged
+    mapping = {1: 5}
+    result = apply_map(img.data, mapping, keep_unmapped=True)
+    assert result[3, 3, 3] == 5    # label 1 -> 5
+    assert result[12, 12, 12] == 2  # label 2 kept
+
+
+def test_map_labels_direct_pairs_parsing(seg_file, tmp_path):
+    """Test that --map 1:2 3:0 style CLI args produce the correct mapping."""
+    import subprocess, sys
+    out = tmp_path / "out"
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'map',
+         '--seg', str(seg_file), '--out', str(out),
+         '--map', '1:10', '2:20', '--out-suffix', '_mapped'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    out_file = out / 'seg_mapped.nii.gz'
+    assert out_file.exists()
+    img = Image.load(out_file)
+    assert img.data[3, 3, 3] == 10
+    assert img.data[12, 12, 12] == 20
+
+
+def test_map_labels_keep_unmapped_cli(seg_file, tmp_path):
+    """--keep-unmapped preserves labels not in the map."""
+    import subprocess, sys
+    out = tmp_path / "out"
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'map',
+         '--seg', str(seg_file), '--out', str(out),
+         '--map', '1:10', '--keep-unmapped', '--out-suffix', '_mapped'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    out_file = out / 'seg_mapped.nii.gz'
+    img = Image.load(out_file)
+    assert img.data[3, 3, 3] == 10   # label 1 -> 10
+    assert img.data[12, 12, 12] == 2  # label 2 kept
+
+
+def test_map_labels_update_seg_cli(seg_file, tmp_path):
+    """--update-seg fills zeros in output from companion seg."""
+    import subprocess, sys
+    import nibabel as nib
+
+    # Build a companion seg with label 99 where output will be zero (label 2 region)
+    companion_data = np.zeros((20, 20, 20), dtype=np.int16)
+    companion_data[10:16, 10:16, 10:16] = 99
+    companion_path = tmp_path / "companion.nii.gz"
+    nib.save(nib.Nifti1Image(companion_data, np.eye(4)), companion_path)
+
+    out = tmp_path / "out"
+    out.mkdir()
+    # Map only label 1 -> 10; label 2 becomes 0 (unmapped, no keep-unmapped)
+    # --update-seg fills those zeros with companion's 99
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'map',
+         '--seg', str(seg_file), '--out', str(out),
+         '--map', '1:10', '--update-seg', str(companion_path),
+         '--out-suffix', '_mapped'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    img = Image.load(out / 'seg_mapped.nii.gz')
+    assert img.data[3, 3, 3] == 10    # label 1 -> 10
+    assert img.data[12, 12, 12] == 99  # zero filled from companion
+
+
+def test_map_labels_update_from_seg_cli(seg_file, tmp_path):
+    """--update-from-seg overwrites output where companion seg is non-zero."""
+    import subprocess, sys
+    import nibabel as nib
+
+    # Build a companion seg that overwrites the label-1 region with 77
+    companion_data = np.zeros((20, 20, 20), dtype=np.int16)
+    companion_data[2:8, 2:8, 2:8] = 77
+    companion_path = tmp_path / "from_seg.nii.gz"
+    nib.save(nib.Nifti1Image(companion_data, np.eye(4)), companion_path)
+
+    out = tmp_path / "out"
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'map',
+         '--seg', str(seg_file), '--out', str(out),
+         '--map', '1:10', '2:20',
+         '--update-from-seg', str(companion_path),
+         '--out-suffix', '_mapped'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    img = Image.load(out / 'seg_mapped.nii.gz')
+    assert img.data[3, 3, 3] == 77    # overwritten by companion
+    assert img.data[12, 12, 12] == 20  # label 2 -> 20, companion is zero here
+
+
 def test_map_labels_cli(seg_file, map_json, tmp_path):
     import subprocess, sys
     out = tmp_path / "out"
