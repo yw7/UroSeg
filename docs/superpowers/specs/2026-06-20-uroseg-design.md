@@ -87,77 +87,58 @@ uroseg bladder  --img input/ --out output/
 
 ## Model Registry
 
-Each organ model is a JSON file in `uroseg/resources/models/`. Models support a single step (one nnU-Net model, multiple labels) or multiple cascaded steps (coarse → fine, where later steps receive earlier steps' output as an additional input channel).
+Each organ model is a JSON file in `uroseg/resources/models/`. Each model is a **single nnU-Net model** that outputs one or more labels. When a model has hierarchical labels (parent + subclasses), nnU-Net's native `regions_class_order` is used — a single model with sigmoid activations per region rather than softmax, so labels can overlap (e.g. whole prostate = union of its zones).
 
-### Single-step model (`resources/models/bladder.json`)
-Used when one model segments all labels directly:
+### Simple model (`resources/models/bladder.json`)
 ```json
 {
   "name": "bladder",
   "description": "Urinary bladder (CT)",
-  "steps": [
-    {
-      "nnunet_task": "Dataset010_Bladder",
-      "modality": ["CT"],
-      "labels": {
-        "1": "bladder"
-      },
-      "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
-    }
-  ]
+  "nnunet_task": "Dataset010_Bladder",
+  "modality": ["CT"],
+  "labels": {
+    "0": "background",
+    "1": "bladder"
+  },
+  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
 }
 ```
 
-### Multi-step (cascaded) model (`resources/models/prostate.json`)
-Step 0 segments the whole prostate; step 1 uses that mask as an extra input channel to segment the internal zones:
+### Region-based model with sublabels (`resources/models/prostate.json`)
+A single model outputs the whole prostate and its internal zones simultaneously:
 ```json
 {
   "name": "prostate",
   "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
-  "steps": [
-    {
-      "nnunet_task": "Dataset001_Prostate",
-      "modality": ["MRI-T2"],
-      "labels": {
-        "1": "prostate"
-      },
-      "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
-    },
-    {
-      "nnunet_task": "Dataset002_Prostate_zones",
-      "modality": ["MRI-T2", "prostate_mask"],
-      "labels": {
-        "2": "prostate_pz",
-        "3": "prostate_cz",
-        "4": "prostate_afs"
-      },
-      "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset002_Prostate_zones_r20260101.zip",
-      "input_from_step": 0
-    }
-  ]
+  "nnunet_task": "Dataset001_Prostate",
+  "modality": ["MRI-T2"],
+  "labels": {
+    "0": "background",
+    "1": "prostate",
+    "2": "prostate_pz",
+    "3": "prostate_cz",
+    "4": "prostate_afs"
+  },
+  "regions_class_order": [1, 2, 3, 4],
+  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
 }
 ```
 
-`modality` in step 1 has two entries: the original image channel and the name of the channel coming from step 0's output. This maps directly to nnU-Net's `dataset.json` `channel_names`.
+`regions_class_order` maps directly to nnU-Net v2's `dataset.json` field of the same name. When present, `uroseg train` generates a region-based `dataset.json` (sigmoid, overlapping labels supported — label 1 is the union of 2+3+4 in the ground truth). When absent, standard multi-class softmax training is used.
 
-`input_from_step` (integer, optional) — index of the step whose output seg is concatenated as an additional input channel for this step's nnU-Net model. This is how nnU-Net's cascade works: step 2 sees both the original image and step 1's segmentation.
-
-### Fields (per step)
-- `nnunet_task` — nnU-Net dataset folder name; used for predict, train, and install
-- `modality` — list of channel names for nnU-Net's `dataset.json` (index 0 = image, index 1 = previous step seg if `input_from_step` set)
-- `labels` — label ID → anatomical name; used to auto-generate `dataset.json` and for `uroseg map`
-- `weights_url` — full GitHub Release zip URL (optional; omit for community/unreleased models); release ID extracted from URL determines results subdirectory
-- `input_from_step` — (optional) index of prior step whose seg is passed as extra input channel
-
-### Top-level fields
+### Fields
 - `name` — matches filename stem and CLI subcommand token
-- `description` — human-readable summary including all labels across all steps
-- `steps` — ordered list; inference runs them in order, passing outputs forward
+- `description` — human-readable summary of all labels
+- `nnunet_task` — nnU-Net dataset folder name; used for train, predict, and install
+- `modality` — list of input channel names for nnU-Net's `dataset.json` `channel_names`
+- `labels` — label ID → anatomical name; used to auto-generate `dataset.json` and for `uroseg map`
+- `regions_class_order` — (optional) list of label IDs enabling nnU-Net region-based training for hierarchical/overlapping labels
+- `weights_url` — full GitHub Release zip URL (optional; omit for community/unreleased models); release ID extracted from URL determines results subdirectory
 
 **Training workflow — model JSON first:**
-The user creates `resources/models/<organ>.json` before training. `uroseg train --step N` trains one step at a time. It reads the step's fields and auto-generates `dataset.json` (labels, channel names, num_training from `imagesTr/` count). For steps with `input_from_step`, the user must first generate the previous step's predictions on the training set and place them in `imagesTr/` as an additional channel.
+The user creates `resources/models/<organ>.json` before training. `uroseg train` reads it and auto-generates `dataset.json` (labels, channel names, `regions_class_order` if present, num_training from `imagesTr/` count). The user only places raw images in `imagesTr/` and segmentations in `labelsTr/`.
 
-Adding a new organ: create the model JSON → train each step → open PR.
+Adding a new organ: create the model JSON → place data → run `uroseg train` → open PR.
 
 ---
 
@@ -318,7 +299,6 @@ Python replacement for `scripts/train.sh`. Wraps nnU-Net with AugLab online augm
 ```
 uroseg train \
   --organ prostate \
-  --step 0 \                            # which step to train (0-indexed); default: 0
   --fold N \
   [--auglab-config auglab.json] \
   [--gpus 1] \
@@ -326,21 +306,14 @@ uroseg train \
 ```
 
 ### Steps executed internally
-1. Load `resources/models/<organ>.json`, select `steps[--step]`
+1. Load `resources/models/<organ>.json`
 2. Resolve `data_path` via `--data-dir` → `UROSEG_DATA` → package default
 3. Set `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars from `data_path` automatically
-4. Auto-generate `data_path/nnUNet/raw/<nnunet_task>/dataset.json` from the step's fields (labels, channel names including prior step channel if `input_from_step` set, num_training from `imagesTr/` count)
+4. Auto-generate `data_path/nnUNet/raw/<nnunet_task>/dataset.json` from the model JSON (labels, channel names, `regions_class_order` if present, num_training from `imagesTr/` count)
 5. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
 6. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
 7. If `--auglab-config` is provided, set `AUGLAB_CONFIG` env var before invoking nnU-Net
 8. On completion, print the full results path where the trained model is stored
-
-For cascaded models, train each step separately in order:
-```bash
-uroseg train --organ prostate --step 0 --fold 0   # train whole-prostate model
-# generate step 0 predictions on training set, place as extra channel in imagesTr/
-uroseg train --organ prostate --step 1 --fold 0   # train zone model
-```
 
 ### Data directory & trained model storage
 
@@ -402,8 +375,8 @@ pip install light-the-torch
 ltt install torch
 
 # 2. Install UroSeg
-pip install uroseg                # standard
-pip install -e "."                # development
+pip install uroseg          # standard
+pip install -e .            # development
 
 # 3. Download model weights
 uroseg install --model prostate
@@ -470,29 +443,16 @@ Each GitHub release creates a date-stamped tag (e.g. `r20260101`), attaches zip 
 
 ## Inference Data Flow
 
-Single-step model:
 ```
 --img input(s)
   → collect_niftis() → Image.load() → reorient (RAS)
-  → nnU-Net predict (steps[0].nnunet_task)
-  → seg NIfTI with steps[0].labels
+  → check weights installed; auto-download if missing
+  → nnU-Net predict (model.nnunet_task)
+      outputs all labels in one forward pass
+      (region-based sigmoid if regions_class_order present, else softmax)
+  → output seg NIfTI with all label IDs per model.labels
   → save to --out
 ```
-
-Multi-step (cascaded) model:
-```
---img input(s)
-  → collect_niftis() → Image.load() → reorient (RAS)
-  → nnU-Net predict (steps[0].nnunet_task)              # e.g. whole prostate, label 1
-  → step0_seg written to temp dir
-  → nnU-Net predict (steps[1].nnunet_task)              # e.g. zones, labels 2/3/4
-      input channels: [original_img, step0_seg]         # concatenated per input_from_step
-  → step1_seg written to temp dir
-  → merge all step segs into single output NIfTI        # label IDs from all steps combined
-  → save to --out
-```
-
-Weights for all steps are checked on first inference call; any missing are auto-downloaded before prediction begins.
 
 ---
 
@@ -508,8 +468,8 @@ Table: command | anatomy | labels
 ## Installation
 1. Prerequisites
 2. Install PyTorch (light-the-torch, two lines)
-3. Install UroSeg (pip install)
-4. Download weights (uroseg install)
+3. Install UroSeg: pip install uroseg
+4. Download weights: uroseg install --model prostate
 
 ## Usage
 ### Inference (uroseg prostate, uroseg bladder, ...)
