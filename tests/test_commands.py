@@ -202,3 +202,50 @@ def test_crop_cli(img_file, seg_file, tmp_path):
     assert result.returncode == 0, result.stderr
     assert (out_img / 'img_crop.nii.gz').exists()
     assert (out_seg / 'seg_crop.nii.gz').exists()
+
+
+# ── preview_jpg ───────────────────────────────────────────────────────────────
+
+def test_make_preview_no_seg(img_file):
+    from uroseg.commands.preview_jpg import make_preview
+    img = Image.load(img_file)
+    preview = make_preview(img.data, seg_data=None)
+    assert preview.ndim == 3
+    assert preview.shape[2] == 3
+    assert preview.dtype == np.uint8
+
+
+def test_make_preview_with_seg(img_file, seg_file):
+    from uroseg.commands.preview_jpg import make_preview
+    img = Image.load(img_file)
+    seg = Image.load(seg_file)
+    preview = make_preview(img.data, seg_data=seg.data)
+    assert preview.ndim == 3
+    assert preview.dtype == np.uint8
+
+
+def test_preview_cli_no_seg(img_file, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'preview',
+         '--img', str(img_file), '--out', str(out), '--out-suffix', '_preview'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_preview.jpg').exists()
+
+
+def test_preview_cli_with_seg(img_file, seg_file, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'preview',
+         '--img', str(img_file), '--seg', str(seg_file),
+         '--out', str(out), '--out-suffix', '_preview'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_preview.jpg').exists()
