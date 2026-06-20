@@ -19,36 +19,47 @@ def main() -> None:
     if cmd == 'list':
         _cmd_list()
     elif cmd == 'install':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.install import main as run
         run()
     elif cmd == 'train':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.train import main as run
         run()
     elif cmd == 'map':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.map_labels import main as run
         run()
     elif cmd == 'resample':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.resample import main as run
         run()
     elif cmd == 'preview':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.preview_jpg import main as run
         run()
     elif cmd == 'crop':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.crop_image2seg import main as run
         run()
     elif cmd == 'largest_component':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.largest_component import main as run
         run()
     elif cmd == 'reorient':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.reorient_canonical import main as run
         run()
     elif cmd == 'cpdir':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.cpdir import main as run
         run()
     elif cmd == 'transform_seg2image':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.transform_seg2image import main as run
         run()
     elif cmd == 'predict_nnunet':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.predict_nnunet import main as run
         run()
     elif cmd.startswith('-'):
