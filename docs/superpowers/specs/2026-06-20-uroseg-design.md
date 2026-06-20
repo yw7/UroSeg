@@ -100,17 +100,16 @@ Each organ model is a JSON file in `uroseg/resources/models/`:
     "2": "prostate_cz",
     "3": "prostate_afs"
   },
-  // No weights_filename here — URLs live in pyproject.toml [project.urls]
+  "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
 }
 ```
 
 Fields:
 - `name` — matches the filename stem and the CLI subcommand token
 - `modality` — channel names passed to nnU-Net's `dataset.json` (e.g. `["MRI-T2"]`); used by `uroseg train` to auto-generate `dataset.json`
-- `nnunet_task` — nnU-Net dataset folder name, e.g. `Dataset001_Prostate`; must match the key used in `pyproject.toml [project.urls]`
+- `nnunet_task` — nnU-Net dataset folder name, e.g. `Dataset001_Prostate`
 - `labels` — label ID → anatomical name mapping; used to auto-generate `dataset.json` and for `uroseg map`
-
-Note: weights URLs are **not** stored in the model JSON. They live in `pyproject.toml [project.urls]` and are read at runtime via `importlib.metadata` (see Weight URLs & Versioned Releases section).
+- `weights_url` — full GitHub Release zip URL (optional; omit for community/unreleased models); the release ID (e.g. `r20260101`) is extracted from the URL at runtime to determine the results subdirectory
 
 **Training workflow — model JSON first:**
 The user creates `resources/models/<organ>.json` before training. `uroseg train` reads it and auto-generates the nnU-Net `dataset.json` (label map, channel names, num_training) so the user never writes `dataset.json` by hand. The user only needs to place raw images and segmentations in the `imagesTr/` and `labelsTr/` directories.
@@ -367,40 +366,14 @@ light-the-torch is not a dependency of UroSeg — it is a user-side installation
 
 ## Weight URLs & Versioned Releases
 
-Pre-trained model weights are distributed as GitHub Release assets. URLs are defined in `pyproject.toml` under `[project.urls]` — read at runtime via `importlib.metadata`, never hardcoded in Python source.
+Pre-trained model weights are distributed as GitHub Release assets. Each model's `weights_url` in its JSON file is the single source of truth — all model metadata lives in one place.
 
-### `pyproject.toml` — URL definitions
-```toml
-[project.urls]
-Dataset001_Prostate = "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip, Dataset001_Prostate"
-Dataset002_Bladder  = "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset002_Bladder_r20260101.zip, Dataset002_Bladder"
+### URL format
+```
+https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip
 ```
 
-The key must match `nnunet_task` in the corresponding model JSON.
-
-### Runtime URL resolution (`utils/utils.py`)
-```python
-from importlib.metadata import metadata
-
-def get_zip_urls():
-    meta = metadata('uroseg')
-    return {
-        k: v.split(', ')[0]
-        for k, v in (
-            entry.split(', ', 1)
-            for entry in meta.get_all('Project-URL') or []
-        )
-        if k.startswith('Dataset')
-    }
-
-VERSION = metadata('uroseg').get('version')
-ZIP_URLS = get_zip_urls()
-```
-
-No URLs or versions are hardcoded anywhere in Python source.
-
-### Release ID and versioned folder layout
-The release ID (e.g. `r20260101`) is extracted from the zip URL path segment. It becomes a subdirectory under `nnUNet/results/`, so multiple installed versions coexist:
+The release ID (e.g. `r20260101`) is a date-stamped tag. It is extracted from the URL at runtime and used as a subdirectory under `nnUNet/results/`, so multiple installed versions coexist:
 ```
 data_path/nnUNet/results/
 ├── r20260101/
@@ -409,20 +382,39 @@ data_path/nnUNet/results/
     └── Dataset001_Prostate/
 ```
 
+### Runtime URL resolution (`utils/utils.py`)
+```python
+from importlib.resources import files
+import json
+
+def get_model(name: str) -> dict:
+    path = files('uroseg.resources.models').joinpath(f'{name}.json')
+    return json.loads(path.read_text())
+
+def get_all_models() -> dict[str, dict]:
+    models_dir = files('uroseg.resources.models')
+    return {
+        p.stem: json.loads(p.read_text())
+        for p in models_dir.iterdir()
+        if p.name.endswith('.json')
+    }
+```
+
+No URLs are hardcoded in Python source — they live only in the JSON files.
+
 ### `uroseg install` behaviour
 ```
 uroseg install --model prostate [--data-dir PATH] [--store-export]
 uroseg install --all            [--data-dir PATH] [--store-export]
 ```
-1. Looks up the dataset URL from `ZIP_URLS` via the model JSON's `nnunet_task`
-2. Downloads zip to `data_path/nnUNet/exports/`
-3. Extracts to `data_path/nnUNet/results/<release_id>/`
-4. Removes zip unless `--store-export` is passed
-
-Models with no entry in `[project.urls]` (community/unreleased) are not auto-downloaded.
+1. Loads model JSON(s) via `get_model()` / `get_all_models()`
+2. Reads `weights_url`; skips models without one (community/unreleased)
+3. Downloads zip to `data_path/nnUNet/exports/`
+4. Extracts release ID from URL, extracts zip to `data_path/nnUNet/results/<release_id>/`
+5. Removes zip unless `--store-export` is passed
 
 ### Release workflow
-Each GitHub release creates a tag (e.g. `r20260101`), attaches zip archives named `Dataset###_<Name>_r20260101.zip`, and updates the `[project.urls]` entries in `pyproject.toml` before publishing to PyPI.
+Each GitHub release creates a date-stamped tag (e.g. `r20260101`), attaches zip archives named `Dataset###_<Name>_r20260101.zip`, and updates `weights_url` in the relevant model JSON files before publishing to PyPI.
 
 ---
 
