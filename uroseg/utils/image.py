@@ -55,3 +55,38 @@ class Image:
         mins = nonzero.min(axis=0)
         maxs = nonzero.max(axis=0)
         return tuple(slice(int(mn), int(mx) + 1) for mn, mx in zip(mins, maxs))
+
+
+def save_nifti_image(data: np.ndarray, affine: np.ndarray, header, path) -> None:
+    """Save a NIfTI image preserving integer dtype with overflow rescaling.
+
+    If the array dtype is integer and the data values overflow the dtype range
+    (can happen after float-space processing), linearly rescale to fit.
+    Always sets qform and sform to affine.
+    """
+    dtype = data.dtype
+    if np.issubdtype(dtype, np.integer):
+        data = data.astype(np.float64)
+        d_min, d_max = data.min(), data.max()
+        info = np.iinfo(dtype)
+        if d_min < info.min or d_max > info.max:
+            rescaled = data * (info.max - info.min) / (d_max - d_min)
+            data = rescaled - (rescaled.min() - info.min)
+        data = data.astype(dtype)
+    header = header.copy() if header is not None else nib.Nifti1Header()
+    header.set_data_dtype(dtype)
+    nib_img = nib.Nifti1Image(data, affine, header)
+    nib_img.set_qform(affine)
+    nib_img.set_sform(affine)
+    nib.save(nib_img, path)
+
+
+def save_nifti_seg(data: np.ndarray, affine: np.ndarray, header, path) -> None:
+    """Save a segmentation as uint8, rounding first. Always sets qform/sform."""
+    data = np.round(data).astype(np.uint8)
+    header = header.copy() if header is not None else nib.Nifti1Header()
+    header.set_data_dtype(np.uint8)
+    nib_img = nib.Nifti1Image(data, affine, header)
+    nib_img.set_qform(affine)
+    nib_img.set_sform(affine)
+    nib.save(nib_img, path)

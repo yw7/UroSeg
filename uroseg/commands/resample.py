@@ -5,7 +5,7 @@ from pathlib import Path
 
 from tqdm.contrib.concurrent import process_map
 
-from uroseg.utils.image import Image
+from uroseg.utils.image import Image, save_nifti_image
 from uroseg.utils.utils import add_common_args, build_pairs
 
 
@@ -14,7 +14,7 @@ def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
     img = Image.load(input_path)
     img = img.resample(tuple(args.spacing))
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(output_path)
+    save_nifti_image(img.data, img.affine, img.header, str(output_path))
 
 
 def main() -> None:

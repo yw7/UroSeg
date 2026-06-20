@@ -7,7 +7,7 @@ import numpy as np
 from scipy import ndimage
 from tqdm.contrib.concurrent import process_map
 
-from uroseg.utils.image import Image
+from uroseg.utils.image import Image, save_nifti_seg
 from uroseg.utils.utils import add_common_args, build_pairs
 
 
@@ -31,7 +31,7 @@ def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
     labels = args.labels if args.labels else None
     img.data = keep_largest_component(img.data, labels)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(output_path)
+    save_nifti_seg(img.data, img.affine, img.header, str(output_path))
 
 
 def main() -> None:

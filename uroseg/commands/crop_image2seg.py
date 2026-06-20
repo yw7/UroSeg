@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from tqdm.contrib.concurrent import process_map
 
-from uroseg.utils.image import Image
+from uroseg.utils.image import Image, save_nifti_image, save_nifti_seg
 from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path
 
 
@@ -35,8 +35,8 @@ def process_one(
     cropped_img, cropped_seg = crop_to_seg(img, seg)
     img_out.parent.mkdir(parents=True, exist_ok=True)
     seg_out.parent.mkdir(parents=True, exist_ok=True)
-    cropped_img.save(img_out)
-    cropped_seg.save(seg_out)
+    save_nifti_image(cropped_img.data, cropped_img.affine, cropped_img.header, str(img_out))
+    save_nifti_seg(cropped_seg.data, cropped_seg.affine, cropped_seg.header, str(seg_out))
 
 
 def main() -> None:

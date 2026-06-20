@@ -8,7 +8,7 @@ import nibabel as nib
 import nibabel.processing as nibp
 from tqdm.contrib.concurrent import process_map
 
-from uroseg.utils.image import Image
+from uroseg.utils.image import Image, save_nifti_seg
 from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path
 
 
@@ -32,7 +32,7 @@ def process_one(
     ref = Image.load(img_path)
     result = resample_seg_to_image(seg, ref)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    result.save(out_path)
+    save_nifti_seg(result.data, result.affine, result.header, str(out_path))
 
 
 def main() -> None:
