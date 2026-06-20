@@ -100,19 +100,20 @@ Each organ model is a JSON file in `uroseg/resources/models/`:
     "2": "prostate_cz",
     "3": "prostate_afs"
   },
-  "weights_filename": "prostate.zip"    // GitHub Release asset name; omit for community/unreleased models
+  // No weights_filename here — URLs live in pyproject.toml [project.urls]
 }
 ```
 
 Fields:
 - `name` — matches the filename stem and the CLI subcommand token
 - `modality` — channel names passed to nnU-Net's `dataset.json` (e.g. `["MRI-T2"]`); used by `uroseg train` to auto-generate `dataset.json`
-- `nnunet_task` — nnU-Net dataset/task identifier used for predict and train
+- `nnunet_task` — nnU-Net dataset folder name, e.g. `Dataset001_Prostate`; must match the key used in `pyproject.toml [project.urls]`
 - `labels` — label ID → anatomical name mapping; used to auto-generate `dataset.json` and for `uroseg map`
-- `weights_filename` — filename of the weights archive on the GitHub Release (e.g. `prostate_v1.0.0.zip`); URL is constructed at runtime from the package version (see Weight URLs section)
+
+Note: weights URLs are **not** stored in the model JSON. They live in `pyproject.toml [project.urls]` and are read at runtime via `importlib.metadata` (see Weight URLs & Versioned Releases section).
 
 **Training workflow — model JSON first:**
-The user creates `resources/models/<organ>.json` before training. `uroseg train` reads it and auto-generates the nnU-Net `dataset.json` (label map, channel names, num_training) so the user never writes `dataset.json` by hand. The user only needs to place raw images and segmentations in `nnUNet_raw/DatasetXXX/imagesTr/` and `labelsTr/`.
+The user creates `resources/models/<organ>.json` before training. `uroseg train` reads it and auto-generates the nnU-Net `dataset.json` (label map, channel names, num_training) so the user never writes `dataset.json` by hand. The user only needs to place raw images and segmentations in the `imagesTr/` and `labelsTr/` directories.
 
 Adding a new organ requires only: creating the model JSON, placing data, running `uroseg train`, and opening a PR.
 
@@ -279,28 +280,46 @@ uroseg train \
   --fold N \
   [--auglab-config auglab.json] \
   [--gpus 1] \
-  [--nnunet-dir /path/to/nnunet_data]
+  [--data-dir /path/to/uroseg_data]    # overrides UROSEG_DATA env var
 ```
 
 ### Steps executed internally
 1. Load `resources/models/<organ>.json`
-2. Validate that `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars are set (or use `--nnunet-dir`)
-3. Auto-generate `nnUNet_raw/DatasetXXX/dataset.json` from the model JSON (labels, channel names, num_training from imagesTr count)
-4. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
-5. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
-6. If `--auglab-config` is provided, set `AUGLAB_CONFIG` env var before invoking nnU-Net
-7. On completion, print the `nnUNet_results/` path where the trained model is stored
+2. Resolve `data_path` via `--data-dir` → `UROSEG_DATA` → package default
+3. Set `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars from `data_path` automatically
+4. Auto-generate `data_path/nnUNet/raw/DatasetXXX/dataset.json` from the model JSON (labels, channel names, num_training from `imagesTr/` count)
+5. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
+6. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
+7. If `--auglab-config` is provided, set `AUGLAB_CONFIG` env var before invoking nnU-Net
+8. On completion, print the full results path where the trained model is stored
 
-### Trained model storage
-By default, nnU-Net stores trained models in `$nnUNet_results/DatasetXXX_<name>/nnUNetTrainerDAExt__nnUNetPlans__3d_fullres/`. This path is set via the `nnUNet_results` environment variable.
+### Data directory & trained model storage
 
-To use a different location, set `nnUNet_results` before training:
-```bash
-export nnUNet_results=/path/to/my/models
-uroseg train --organ prostate --dataset 1 --fold 0
+UroSeg uses a single `data_path` root for all nnU-Net data, resolved in this priority order:
+
+1. `--data-dir` CLI argument (highest priority)
+2. `UROSEG_DATA` environment variable
+3. Package directory via `importlib.resources` (default, ships with package)
+
+The directory layout under `data_path`:
+```
+data_path/
+└── nnUNet/
+    ├── raw/                          # nnUNet_raw — user's training images
+    ├── preprocessed/                 # nnUNet_preprocessed — auto-created by nnU-Net
+    ├── results/
+    │   └── r20260101/                # release ID extracted from zip URL
+    │       └── Dataset001_Prostate/
+    │           └── nnUNetTrainerDAExt__nnUNetPlans__3d_fullres/
+    │               └── fold_0/
+    │                   ├── checkpoint_best.pth
+    │                   └── checkpoint_final.pth
+    └── exports/                      # downloaded zip archives (removed after extract by default)
 ```
 
-For inference, the same `nnUNet_results` variable is used by `uroseg predict_nnunet` to locate the model.
+`uroseg train` sets `nnUNet_raw`, `nnUNet_preprocessed`, and `nnUNet_results` automatically from `data_path` before calling nnU-Net — the user never sets these manually. `nnUNet_results` is set to `data_path/nnUNet/results/`.
+
+Multiple release versions coexist under `results/` by their release ID subdirectory. Inference selects the correct release by checking which release folder contains the required dataset, falling back to the latest if multiple are present.
 
 ### AugLab integration
 AugLab's `nnUNetTrainerDAExt` is specified via nnU-Net's `--trainer` flag — no monkey-patching. AugLab is a required dependency. When `--auglab-config` is provided, `uroseg train` sets the `AUGLAB_CONFIG` environment variable to the JSON path before invoking nnU-Net; the AugLab trainer reads this variable internally. If `--auglab-config` is omitted, AugLab trainer defaults are used.
@@ -348,31 +367,62 @@ light-the-torch is not a dependency of UroSeg — it is a user-side installation
 
 ## Weight URLs & Versioned Releases
 
-Pre-trained model weights are distributed as GitHub Release assets, version-pinned to the UroSeg package version. This ensures that installed weights always match the model architecture of the installed package.
+Pre-trained model weights are distributed as GitHub Release assets. URLs are defined in `pyproject.toml` under `[project.urls]` — read at runtime via `importlib.metadata`, never hardcoded in Python source.
 
-### How it works
-`uroseg/__init__.py` defines the base URL using the package version:
+### `pyproject.toml` — URL definitions
+```toml
+[project.urls]
+Dataset001_Prostate = "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip, Dataset001_Prostate"
+Dataset002_Bladder  = "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset002_Bladder_r20260101.zip, Dataset002_Bladder"
+```
+
+The key must match `nnunet_task` in the corresponding model JSON.
+
+### Runtime URL resolution (`utils/utils.py`)
 ```python
-from importlib.metadata import version
-__version__ = version("uroseg")
-WEIGHTS_BASE_URL = f"https://github.com/<org>/uroseg/releases/download/v{__version__}/"
+from importlib.metadata import metadata
+
+def get_zip_urls():
+    meta = metadata('uroseg')
+    return {
+        k: v.split(', ')[0]
+        for k, v in (
+            entry.split(', ', 1)
+            for entry in meta.get_all('Project-URL') or []
+        )
+        if k.startswith('Dataset')
+    }
+
+VERSION = metadata('uroseg').get('version')
+ZIP_URLS = get_zip_urls()
 ```
 
-Each model JSON's `weights_filename` field holds the archive name (e.g. `prostate.zip`). `uroseg install` constructs the full URL at runtime:
-```python
-url = WEIGHTS_BASE_URL + model["weights_filename"]
+No URLs or versions are hardcoded anywhere in Python source.
+
+### Release ID and versioned folder layout
+The release ID (e.g. `r20260101`) is extracted from the zip URL path segment. It becomes a subdirectory under `nnUNet/results/`, so multiple installed versions coexist:
+```
+data_path/nnUNet/results/
+├── r20260101/
+│   └── Dataset001_Prostate/
+└── r20261001/          ← newer release, different weights
+    └── Dataset001_Prostate/
 ```
 
-### Downloaded weights storage
-Weights are downloaded to `~/.uroseg/weights/` by default. Override with:
-```bash
-export UROSEG_WEIGHTS_DIR=/path/to/weights
+### `uroseg install` behaviour
 ```
+uroseg install --model prostate [--data-dir PATH] [--store-export]
+uroseg install --all            [--data-dir PATH] [--store-export]
+```
+1. Looks up the dataset URL from `ZIP_URLS` via the model JSON's `nnunet_task`
+2. Downloads zip to `data_path/nnUNet/exports/`
+3. Extracts to `data_path/nnUNet/results/<release_id>/`
+4. Removes zip unless `--store-export` is passed
 
-`uroseg install` downloads and extracts weights there. `uroseg predict_nnunet` and inference commands check `UROSEG_WEIGHTS_DIR` first, then fall back to `nnUNet_results` for locally trained models.
+Models with no entry in `[project.urls]` (community/unreleased) are not auto-downloaded.
 
 ### Release workflow
-Each GitHub release tags a version and attaches weights archives as release assets. The `weights_filename` in each model JSON must match the asset name on that release. Community/unreleased models omit `weights_filename` and are not auto-downloaded.
+Each GitHub release creates a tag (e.g. `r20260101`), attaches zip archives named `Dataset###_<Name>_r20260101.zip`, and updates the `[project.urls]` entries in `pyproject.toml` before publishing to PyPI.
 
 ---
 
