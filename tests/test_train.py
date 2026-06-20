@@ -126,7 +126,7 @@ def test_train_generates_dataset_json(tmp_path):
 
         import sys
         with patch.object(sys, "argv", [
-            "uroseg", "train", "--organ", "prostate", "--fold", "0",
+            "uroseg", "train", "prostate", "--fold", "0",
             "--data-dir", str(tmp_path),
         ]):
             main()
@@ -167,7 +167,7 @@ def test_train_calls_nnunet_train(tmp_path):
 
         import sys
         with patch.object(sys, "argv", [
-            "uroseg", "train", "--organ", "bladder", "--fold", "0",
+            "uroseg", "train", "bladder", "--fold", "0",
             "--data-dir", str(tmp_path),
         ]):
             main()
@@ -210,7 +210,7 @@ def test_train_skips_preprocess_if_done(tmp_path):
 
         import sys
         with patch.object(sys, "argv", [
-            "uroseg", "train", "--organ", "bladder", "--fold", "0",
+            "uroseg", "train", "bladder", "--fold", "0",
             "--data-dir", str(tmp_path),
         ]):
             main()
@@ -254,7 +254,7 @@ def test_train_sets_auglab_config_env(tmp_path):
 
         import sys
         with patch.object(sys, "argv", [
-            "uroseg", "train", "--organ", "bladder", "--fold", "0",
+            "uroseg", "train", "bladder", "--fold", "0",
             "--data-dir", str(tmp_path),
             "--auglab-config", str(auglab_cfg),
         ]):
@@ -276,7 +276,7 @@ def test_train_fails_when_no_images_tr(tmp_path):
 
         import sys
         with patch.object(sys, "argv", [
-            "uroseg", "train", "--organ", "bladder", "--fold", "0",
+            "uroseg", "train", "bladder", "--fold", "0",
             "--data-dir", str(tmp_path),
         ]):
             with pytest.raises((FileNotFoundError, SystemExit)):
@@ -290,6 +290,6 @@ def test_train_cli_help():
         capture_output=True, text=True
     )
     assert result.returncode == 0
-    assert '--organ' in result.stdout
+    assert 'organ' in result.stdout
     assert '--fold' in result.stdout
     assert '--auglab-config' in result.stdout

@@ -110,7 +110,7 @@ uroseg crop                 --img PATH --seg PATH --out-img PATH --out-seg PATH
 uroseg transform_seg2image  --seg PATH --img PATH --out-seg PATH [--seg-suffix SUFFIX]
 uroseg cpdir                --img PATH --out PATH [--out-suffix SUFFIX] [--out-prefix PREFIX]
 uroseg install              --model NAME [NAME ...] | --all [--data-dir PATH]
-uroseg train                --organ NAME --fold N [--auglab-config JSON] [--gpus N] [--data-dir PATH]
+uroseg train ORGAN             [--fold N] [--auglab-config JSON] [--gpus N] [--data-dir PATH]
 uroseg list
 ```
 
@@ -175,13 +175,13 @@ nnU-Net filename convention: images end in `_0000.nii.gz` (channel 0), labels ha
 
 ```bash
 # Basic
-uroseg train --organ kidney --fold 0
+uroseg train kidney
 
 # With AugLab augmentation config
-uroseg train --organ kidney --fold 0 --auglab-config auglab.json
+uroseg train kidney --auglab-config auglab.json
 
 # Custom data directory
-uroseg train --organ kidney --fold 0 --data-dir /scratch/uroseg_data
+uroseg train kidney --data-dir /scratch/uroseg_data
 ```
 
 `uroseg train` automatically:
@@ -230,7 +230,7 @@ All UroSeg data lives under a single configurable root:
 
 1. Create `uroseg/resources/models/<organ>.json` with the fields above
 2. Place training data in `~/uroseg/nnUNet/raw/<nnunet_task>/imagesTr/` and `labelsTr/`
-3. Train: `uroseg train --organ <organ> --fold 0`
+3. Train: `uroseg train <organ>`
 4. Archive the trained model: `Dataset###_<Name>_r<YYYYMMDD>.zip`
 5. Upload as a GitHub Release asset and set `weights_url` in the model JSON
 6. Open a pull request

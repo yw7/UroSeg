@@ -40,7 +40,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Train an nnU-Net model for a UroSeg organ using AugLab augmentation."
     )
-    parser.add_argument("--organ", required=True,
+    parser.add_argument("organ",
                         help="Organ name matching resources/models/<organ>.json")
     parser.add_argument("--fold", type=int, default=0,
                         help="nnU-Net fold number (0–4, default: 0)")
