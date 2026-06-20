@@ -1,6 +1,5 @@
 from __future__ import annotations
 import argparse
-import sys
 from pathlib import Path
 
 from uroseg.utils.utils import add_common_args, resolve_data_path, collect_niftis
@@ -52,7 +51,11 @@ def predict(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    device_obj = torch.device(device if torch.cuda.is_available() else 'cpu')
+    if device == 'cuda' and not torch.cuda.is_available():
+        device = 'cpu'
+    elif device == 'mps' and not torch.backends.mps.is_available():
+        device = 'cpu'
+    device_obj = torch.device(device)
 
     predictor = nnUNetPredictor(
         tile_step_size=step_size,

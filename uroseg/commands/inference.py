@@ -42,10 +42,10 @@ def resolve_organ(organ: str) -> dict:
     return available[organ]
 
 
-def _reorient_to_tmp(input_path: Path, tmp_dir: Path) -> Path:
+def _reorient_to_tmp(input_path: Path, tmp_dir: Path, index: int) -> Path:
     img = Image.load(input_path)
     img = img.reorient('RAS')
-    out = tmp_dir / input_path.name
+    out = tmp_dir / f"{index:04d}_{input_path.name}"
     img.save(out)
     return out
 
@@ -74,7 +74,7 @@ def main() -> None:
 
         if not args.quiet:
             print(f"Reorienting {len(inputs)} image(s) to RAS...")
-        reoriented = [_reorient_to_tmp(p, tmp_in) for p in inputs]
+        reoriented = [_reorient_to_tmp(p, tmp_in, i) for i, p in enumerate(inputs)]
 
         predict(
             model_dir=model_dir,
