@@ -127,3 +127,42 @@ def test_reorient_cli(img_file, tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert (out / 'img_ras.nii.gz').exists()
+
+
+# ── largest_component ─────────────────────────────────────────────────────────
+
+def test_keep_largest_component_removes_small(tmp_path):
+    from uroseg.commands.largest_component import keep_largest_component
+    data = np.zeros((30, 30, 30), dtype=np.int16)
+    data[1:3, 1:3, 1:3] = 1    # small blob
+    data[10:20, 10:20, 10:20] = 1  # large blob
+    result = keep_largest_component(data, labels=None)
+    assert result[1, 1, 1] == 0
+    assert result[15, 15, 15] == 1
+
+
+def test_keep_largest_component_per_label(tmp_path):
+    from uroseg.commands.largest_component import keep_largest_component
+    data = np.zeros((30, 30, 30), dtype=np.int16)
+    data[1:3, 1:3, 1:3] = 1
+    data[10:20, 10:20, 10:20] = 1
+    data[1:3, 20:22, 1:3] = 2
+    data[10:20, 1:10, 10:20] = 2
+    result = keep_largest_component(data, labels=[1, 2])
+    assert result[1, 1, 1] == 0
+    assert result[15, 15, 15] == 1
+    assert result[1, 21, 1] == 0
+    assert result[15, 5, 15] == 2
+
+
+def test_largest_component_cli(seg_file, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'largest_component',
+         '--seg', str(seg_file), '--out', str(out), '--out-suffix', '_lc'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'seg_lc.nii.gz').exists()
