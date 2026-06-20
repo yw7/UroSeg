@@ -89,46 +89,56 @@ uroseg bladder  --img input/ --out output/
 
 Each organ model is a JSON file in `uroseg/resources/models/`. Models support a single step (one nnU-Net model, multiple labels) or multiple cascaded steps (coarse → fine, where later steps receive earlier steps' output as an additional input channel).
 
-### Single-step model
+### Single-step model (`resources/models/bladder.json`)
 Used when one model segments all labels directly:
 ```json
 {
   "name": "bladder",
-  "description": "Urinary bladder",
+  "description": "Urinary bladder (CT)",
   "steps": [
     {
       "nnunet_task": "Dataset010_Bladder",
       "modality": ["CT"],
-      "labels": {"1": "bladder"},
-      "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
+      "labels": {
+        "1": "bladder"
+      },
+      "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
     }
   ]
 }
 ```
 
-### Multi-step (cascaded) model
-Used when subclass segmentation benefits from first segmenting the parent structure. Each step after the first receives the previous step's segmentation as an additional input channel alongside the original image:
+### Multi-step (cascaded) model (`resources/models/prostate.json`)
+Step 0 segments the whole prostate; step 1 uses that mask as an extra input channel to segment the internal zones:
 ```json
 {
   "name": "prostate",
-  "description": "Prostate and zones: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
+  "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
   "steps": [
     {
       "nnunet_task": "Dataset001_Prostate",
       "modality": ["MRI-T2"],
-      "labels": {"1": "prostate"},
-      "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
+      "labels": {
+        "1": "prostate"
+      },
+      "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
     },
     {
       "nnunet_task": "Dataset002_Prostate_zones",
-      "modality": ["MRI-T2"],
-      "labels": {"2": "prostate_pz", "3": "prostate_cz", "4": "prostate_afs"},
-      "weights_url": "https://github.com/<org>/uroseg/releases/download/r20260101/Dataset002_Prostate_zones_r20260101.zip",
+      "modality": ["MRI-T2", "prostate_mask"],
+      "labels": {
+        "2": "prostate_pz",
+        "3": "prostate_cz",
+        "4": "prostate_afs"
+      },
+      "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset002_Prostate_zones_r20260101.zip",
       "input_from_step": 0
     }
   ]
 }
 ```
+
+`modality` in step 1 has two entries: the original image channel and the name of the channel coming from step 0's output. This maps directly to nnU-Net's `dataset.json` `channel_names`.
 
 `input_from_step` (integer, optional) — index of the step whose output seg is concatenated as an additional input channel for this step's nnU-Net model. This is how nnU-Net's cascade works: step 2 sees both the original image and step 1's segmentation.
 
