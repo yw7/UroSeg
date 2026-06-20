@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import shutil
 import sys
 import zipfile
 import urllib.request
@@ -44,17 +45,25 @@ def download_and_extract(model: dict, data_path: Path, store_export: bool = Fals
     zip_name = url.split('/')[-1]
     zip_path = exports_dir / zip_name
 
-    print(f"  Downloading {model['name']} ({zip_name})...")
-    with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
-        def reporthook(count, block_size, total_size):
-            if total_size > 0:
-                bar.total = total_size
-            bar.update(block_size)
-        urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
+    try:
+        print(f"  Downloading {model['name']} ({zip_name})...")
+        with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
+            def reporthook(count, block_size, total_size):
+                if total_size > 0:
+                    bar.total = total_size
+                bar.update(block_size)
+            urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
 
-    print(f"  Extracting to {results_dir}...")
-    with zipfile.ZipFile(zip_path, 'r') as zf:
-        zf.extractall(results_dir)
+        print(f"  Extracting to {results_dir}...")
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(results_dir)
+    except Exception:
+        if zip_path.exists():
+            zip_path.unlink(missing_ok=True)
+        task_dir = results_dir / nnunet_task
+        if task_dir.exists():
+            shutil.rmtree(task_dir)
+        raise
 
     if not store_export:
         zip_path.unlink()

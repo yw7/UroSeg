@@ -88,6 +88,13 @@ def main() -> None:
 
     imgs = collect_niftis(args.img)
     segs = collect_niftis(args.seg) if args.seg else [None] * len(imgs)
+    if args.seg and len(segs) != len(imgs):
+        import sys
+        print(
+            f"Mismatch: {len(imgs)} images vs {len(segs)} segs.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     out_dir = Path(args.out)
 
     pairs = [

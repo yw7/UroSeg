@@ -66,7 +66,7 @@ def get_model(name: str) -> dict:
 def get_all_models() -> dict[str, dict]:
     models_dir = files('uroseg.resources.models')
     return {
-        p.stem: json.loads(p.read_text())
+        p.name.removesuffix('.json'): json.loads(p.read_text())
         for p in models_dir.iterdir()
         if p.name.endswith('.json')
     }
