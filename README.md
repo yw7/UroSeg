@@ -1,0 +1,235 @@
+# UroSeg
+
+Automated segmentation of urological anatomy from medical images. Built on [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) with [AugLab](https://github.com/neuropoly/AugLab) online augmentation.
+
+---
+
+## Available Models
+
+| Command | Anatomy | Modality | Labels |
+|---------|---------|----------|--------|
+| `uroseg prostate` | Prostate | MRI T2 | whole prostate, peripheral zone, central zone, anterior fibromuscular stroma |
+| `uroseg bladder` | Bladder | CT | bladder |
+
+---
+
+## Installation
+
+### 1. Install PyTorch
+
+Use [light-the-torch](https://github.com/pmeier/light-the-torch) to automatically detect your CUDA version and install the correct PyTorch build:
+
+```bash
+pip install light-the-torch
+ltt install torch
+```
+
+### 2. Install UroSeg
+
+```bash
+pip install uroseg
+```
+
+Development install:
+
+```bash
+git clone https://github.com/neuropoly/uroseg
+cd uroseg
+pip install -e .
+```
+
+### 3. Download model weights
+
+```bash
+uroseg install --model prostate
+uroseg install --model bladder
+uroseg install --all          # download all available models
+```
+
+By default, weights are stored in `~/uroseg/nnUNet/results/`. Override with `--data-dir PATH` or by setting `UROSEG_DATA=/path/to/data`.
+
+---
+
+## Usage
+
+### Inference
+
+```bash
+# Single image
+uroseg prostate --img subject01_T2.nii.gz --out subject01_prostate.nii.gz
+uroseg bladder  --img subject01_CT.nii.gz  --out subject01_bladder.nii.gz
+
+# Batch (folder input → folder output)
+uroseg prostate --img /data/mri/ --out /data/segs/ --max-workers 4
+```
+
+### Utilities
+
+```bash
+# Remap label IDs using a JSON map {"src_id": dst_id}
+uroseg map --seg seg.nii.gz --out remapped.nii.gz --map labels.json
+
+# Resample to 1×1×1 mm isotropic
+uroseg resample --img img.nii.gz --out img_1mm.nii.gz --spacing 1 1 1
+
+# Reorient to RAS canonical
+uroseg reorient --img img.nii.gz --out img_ras.nii.gz
+
+# Keep only the largest connected component per label
+uroseg largest_component --seg seg.nii.gz --out seg_lc.nii.gz
+
+# Crop image and seg to segmentation bounding box
+uroseg crop --img img.nii.gz --seg seg.nii.gz \
+            --out-img img_crop.nii.gz --out-seg seg_crop.nii.gz
+
+# Generate JPG preview (3 orthogonal slices, optional seg overlay)
+uroseg preview --img img.nii.gz --seg seg.nii.gz --out preview.jpg
+
+# Resample segmentation to match reference image space (nearest-neighbour)
+uroseg transform_seg2image --seg seg.nii.gz --img ref.nii.gz --out-seg seg_transformed.nii.gz
+
+# Copy NIfTI files with optional renaming
+uroseg cpdir --img /data/mri/ --out /data/mri_copy/ --out-suffix _copy
+
+# List available organ models
+uroseg list
+```
+
+### CLI reference
+
+All commands support `--overwrite`, `--max-workers N`, and `--quiet`.
+
+```
+uroseg <organ>              --img PATH --out PATH [--fold N] [--out-suffix SUFFIX]
+uroseg map                  --seg PATH --out PATH --map JSON [--out-suffix SUFFIX]
+uroseg resample             --img PATH --out PATH --spacing X Y Z [--out-suffix SUFFIX]
+uroseg reorient             --img PATH --out PATH [--orientation RAS] [--out-suffix SUFFIX]
+uroseg largest_component    --seg PATH --out PATH [--labels 1 2 3] [--out-suffix SUFFIX]
+uroseg preview              --img PATH [--seg PATH] --out PATH [--out-suffix SUFFIX]
+uroseg crop                 --img PATH --seg PATH --out-img PATH --out-seg PATH
+uroseg transform_seg2image  --seg PATH --img PATH --out-seg PATH [--seg-suffix SUFFIX]
+uroseg cpdir                --img PATH --out PATH [--out-suffix SUFFIX] [--out-prefix PREFIX]
+uroseg install              --model NAME [NAME ...] | --all [--data-dir PATH]
+uroseg train                --organ NAME --fold N [--auglab-config JSON] [--gpus N] [--data-dir PATH]
+uroseg list
+```
+
+---
+
+## Training
+
+### 1. Create the model JSON
+
+Add `uroseg/resources/models/<organ>.json`. Minimal example (CT, single label):
+
+```json
+{
+  "name": "kidney",
+  "description": "Kidney (CT)",
+  "nnunet_task": "Dataset020_Kidney",
+  "channel_names": {"0": "CT"},
+  "labels": {
+    "0": "background",
+    "1": "kidney"
+  }
+}
+```
+
+Region-based model with hierarchical sub-labels (single model, sigmoid per region):
+
+```json
+{
+  "name": "prostate",
+  "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
+  "nnunet_task": "Dataset001_Prostate",
+  "channel_names": {"0": "MRI-T2"},
+  "labels": {
+    "0": "background",
+    "1": "prostate",
+    "2": "prostate_pz",
+    "3": "prostate_cz",
+    "4": "prostate_afs"
+  },
+  "regions_class_order": [1, 2, 3, 4]
+}
+```
+
+`regions_class_order` enables nnU-Net's region-based training: label 1 in ground truth is the union of labels 2, 3, and 4 (the prostate zones together make up the whole prostate). `channel_names` maps channel index → modality name; use `"CT"` for CT-specific normalization; any other string uses per-case z-score normalization.
+
+### 2. Place training data
+
+```
+~/uroseg/nnUNet/raw/Dataset020_Kidney/
+├── dataset.json          ← auto-generated by uroseg train
+├── imagesTr/
+│   ├── kidney_001_0000.nii.gz   ← image channel 0
+│   └── ...
+└── labelsTr/
+    ├── kidney_001.nii.gz        ← ground truth segmentation
+    └── ...
+```
+
+nnU-Net filename convention: images end in `_0000.nii.gz` (channel 0), labels have no channel suffix.
+
+### 3. Run training
+
+```bash
+# Basic
+uroseg train --organ kidney --fold 0
+
+# With AugLab augmentation config
+uroseg train --organ kidney --fold 0 --auglab-config auglab.json
+
+# Custom data directory
+uroseg train --organ kidney --fold 0 --data-dir /scratch/uroseg_data
+```
+
+`uroseg train` automatically:
+- Generates `dataset.json` from the model JSON
+- Sets `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` environment variables
+- Runs `nnUNetv2_plan_and_preprocess` (skipped if already done)
+- Runs `nnUNetv2_train` with `nnUNetTrainerDAExt` (AugLab's trainer subclass)
+
+Trained model location:
+
+```
+~/uroseg/nnUNet/results/<nnunet_task>/nnUNetTrainerDAExt__nnUNetPlans__3d_fullres/fold_<N>/
+├── checkpoint_best.pth
+└── checkpoint_final.pth
+```
+
+---
+
+## Data Storage
+
+All UroSeg data lives under a single configurable root:
+
+| Priority | Method | Value |
+|----------|--------|-------|
+| 1 (highest) | CLI flag | `--data-dir /path/to/data` |
+| 2 | Environment variable | `export UROSEG_DATA=/path/to/data` |
+| 3 (default) | Default | `~/uroseg/` |
+
+```
+~/uroseg/
+└── nnUNet/
+    ├── raw/                        # user training images (imagesTr/, labelsTr/)
+    ├── preprocessed/               # nnU-Net preprocessing cache (auto-created)
+    ├── results/
+    │   ├── r20260101/              # versioned by release date tag
+    │   │   └── Dataset001_Prostate/
+    │   └── r20261001/              # newer release coexists
+    │       └── Dataset001_Prostate/
+    └── exports/                    # downloaded zip archives (removed after extraction)
+```
+
+---
+
+## Contributing — Adding a New Organ Model
+
+1. Create `uroseg/resources/models/<organ>.json` with the fields above
+2. Place training data in `~/uroseg/nnUNet/raw/<nnunet_task>/imagesTr/` and `labelsTr/`
+3. Train: `uroseg train --organ <organ> --fold 0`
+4. Archive the trained model: `Dataset###_<Name>_r<YYYYMMDD>.zip`
+5. Upload as a GitHub Release asset and set `weights_url` in the model JSON
+6. Open a pull request
