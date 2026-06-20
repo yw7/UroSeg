@@ -183,14 +183,69 @@ def test_resample_changes_spacing(img_file, tmp_path):
     from uroseg.commands.resample import process_one
     import argparse
     out = tmp_path / 'resampled.nii.gz'
-    args = argparse.Namespace(spacing=[2.0, 2.0, 2.0], overwrite=True)
+    args = argparse.Namespace(mm=[2.0, 2.0, 2.0], overwrite=True)
     process_one((img_file, out), args)
     assert out.exists()
     img = Image.load(out)
     assert img.data.ndim == 3
 
 
+def test_resample_mm_single_value_isotropic(img_file, tmp_path):
+    """--mm 1 (single value) resamples isotropically."""
+    from uroseg.commands.resample import process_one
+    import argparse
+    out = tmp_path / 'resampled_iso.nii.gz'
+    args = argparse.Namespace(mm=[1.0], overwrite=True)
+    process_one((img_file, out), args)
+    assert out.exists()
+    result = Image.load(out)
+    assert result.data.ndim == 3
+
+
+def test_resample_mm_three_values_anisotropic(img_file, tmp_path):
+    """--mm 1 0.5 0.5 (three values) resamples anisotropically."""
+    from uroseg.commands.resample import process_one
+    import argparse
+    out = tmp_path / 'resampled_aniso.nii.gz'
+    args = argparse.Namespace(mm=[1.0, 0.5, 0.5], overwrite=True)
+    process_one((img_file, out), args)
+    assert out.exists()
+    result = Image.load(out)
+    assert result.data.ndim == 3
+
+
+def test_resample_cli_mm(img_file, tmp_path):
+    """CLI --mm flag (single value) works end-to-end."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'resample',
+         '--img', str(img_file), '--out', str(out),
+         '--mm', '2', '--out-suffix', '_resampled'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_resampled.nii.gz').exists()
+
+
+def test_resample_cli_mm_three_values(img_file, tmp_path):
+    """CLI --mm with three values works end-to-end."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'resample',
+         '--img', str(img_file), '--out', str(out),
+         '--mm', '1', '0.5', '0.5', '--out-suffix', '_resampled'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_resampled.nii.gz').exists()
+
+
 def test_resample_cli(img_file, tmp_path):
+    """--spacing backwards-compat alias still works."""
     import subprocess, sys
     out = tmp_path / 'out'
     out.mkdir()
@@ -370,6 +425,56 @@ def test_crop_preserves_seg_labels(img_file, seg_file, tmp_path):
     assert 1 in np.unique(cropped_seg.data)
 
 
+def test_crop_margin_expands_bbox(img_file, seg_file, tmp_path):
+    """--margin N expands the bounding box by N voxels on each side."""
+    from uroseg.commands.crop_image2seg import crop_to_seg
+    img = Image.load(img_file)
+    seg = Image.load(seg_file)
+    cropped_no_margin, _ = crop_to_seg(img, seg, margin=0)
+    cropped_with_margin, _ = crop_to_seg(img, seg, margin=2)
+    # Margin should make the cropped volume at least as large along every axis
+    for i in range(3):
+        assert cropped_with_margin.data.shape[i] >= cropped_no_margin.data.shape[i]
+    # At least one dimension must be strictly larger (unless clamped by image bounds)
+    orig_shape = img.data.shape
+    expanded = any(
+        cropped_with_margin.data.shape[i] > cropped_no_margin.data.shape[i]
+        or cropped_no_margin.data.shape[i] == orig_shape[i]  # already at boundary
+        for i in range(3)
+    )
+    assert expanded
+
+
+def test_crop_margin_clamped_to_image(img_file, seg_file, tmp_path):
+    """Very large margin is clamped to the image boundary, not out-of-bounds."""
+    from uroseg.commands.crop_image2seg import crop_to_seg
+    img = Image.load(img_file)
+    seg = Image.load(seg_file)
+    cropped_img, cropped_seg = crop_to_seg(img, seg, margin=100)
+    # Result should not exceed original image shape
+    for i in range(3):
+        assert cropped_img.data.shape[i] <= img.data.shape[i]
+
+
+def test_crop_margin_cli(img_file, seg_file, tmp_path):
+    """CLI --margin flag is accepted and produces valid output."""
+    import subprocess, sys
+    out_img = tmp_path / 'out_img'
+    out_seg = tmp_path / 'out_seg'
+    out_img.mkdir(); out_seg.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'crop',
+         '--img', str(img_file), '--seg', str(seg_file),
+         '--out-img', str(out_img), '--out-seg', str(out_seg),
+         '--img-suffix', '_crop', '--seg-suffix', '_crop',
+         '--margin', '2'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out_img / 'img_crop.nii.gz').exists()
+    assert (out_seg / 'seg_crop.nii.gz').exists()
+
+
 def test_crop_cli(img_file, seg_file, tmp_path):
     import subprocess, sys
     out_img = tmp_path / 'out_img'
@@ -478,8 +583,82 @@ def test_transform_seg_matches_img_shape(img_file, seg_file, tmp_path):
     affine = np.diag([2.0, 2.0, 2.0, 1.0])
     seg_small = Image(data, affine, None)
     ref = Image.load(img_file)
-    result = resample_seg_to_image(seg_small, ref)
+    result = resample_seg_to_image(seg_small, ref, interpolation='nearest')
     assert result.data.shape == ref.data.shape
+
+
+def test_transform_seg2image_nearest_regression(img_file, seg_file, tmp_path):
+    """Regression: --interpolation nearest produces integer segmentation output."""
+    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    seg = Image.load(seg_file)
+    ref = Image.load(img_file)
+    result = resample_seg_to_image(seg, ref, interpolation='nearest')
+    assert result.data.shape == ref.data.shape
+    assert np.issubdtype(result.data.dtype, np.integer) or result.data.dtype == np.uint8
+
+
+def test_transform_seg2image_linear_produces_float(img_file, seg_file, tmp_path):
+    """--interpolation linear produces float32 output."""
+    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    seg = Image.load(seg_file)
+    ref = Image.load(img_file)
+    result = resample_seg_to_image(seg, ref, interpolation='linear')
+    assert result.data.shape == ref.data.shape
+    assert result.data.dtype == np.float32
+
+
+def test_transform_seg2image_label_single_voxel(tmp_path):
+    """--interpolation label places single-voxel landmarks at center of mass."""
+    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    import nibabel as nib
+    # Seg: 20^3 at 1mm, two single-voxel labels
+    seg_data = np.zeros((20, 20, 20), dtype=np.uint8)
+    seg_data[5, 5, 5] = 1
+    seg_data[15, 15, 15] = 2
+    seg = Image(seg_data, np.eye(4), nib.Nifti1Header())
+    # Ref: same space (should round-trip)
+    ref_data = np.zeros((20, 20, 20), dtype=np.int16)
+    ref = Image(ref_data, np.eye(4), nib.Nifti1Header())
+    result = resample_seg_to_image(seg, ref, interpolation='label')
+    assert result.data.shape == ref.data.shape
+    # Each label should appear exactly once
+    assert np.sum(result.data == 1) == 1
+    assert np.sum(result.data == 2) == 1
+
+
+def test_transform_seg2image_cli_nearest(img_file, seg_file, tmp_path):
+    """CLI --interpolation nearest (default) produces output."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'transform_seg2image',
+         '--seg', str(seg_file), '--img', str(img_file),
+         '--out-seg', str(out), '--seg-suffix', '_transformed',
+         '--interpolation', 'nearest'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'seg_transformed.nii.gz').exists()
+
+
+def test_transform_seg2image_cli_linear(img_file, seg_file, tmp_path):
+    """CLI --interpolation linear produces float output file."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'transform_seg2image',
+         '--seg', str(seg_file), '--img', str(img_file),
+         '--out-seg', str(out), '--seg-suffix', '_transformed',
+         '--interpolation', 'linear'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    out_file = out / 'seg_transformed.nii.gz'
+    assert out_file.exists()
+    loaded = Image.load(out_file)
+    assert np.issubdtype(loaded.data.dtype, np.floating)
 
 
 def test_transform_seg2image_cli(img_file, seg_file, tmp_path):

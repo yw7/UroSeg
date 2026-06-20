@@ -11,8 +11,9 @@ from uroseg.utils.utils import add_common_args, build_pairs
 
 def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
     input_path, output_path = pair
+    mm = tuple(args.mm if len(args.mm) == 3 else [args.mm[0]] * 3)
     img = Image.load(input_path)
-    img = img.resample(tuple(args.spacing))
+    img = img.resample(mm)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_image(img.data, img.affine, img.header, str(output_path))
 
@@ -21,8 +22,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Resample image to target voxel spacing.')
     parser.add_argument('--img', required=True, help='Input image file or folder')
     parser.add_argument('--out', required=True, help='Output file or folder')
-    parser.add_argument('--spacing', nargs=3, type=float, required=True,
-                        metavar=('X', 'Y', 'Z'), help='Target voxel spacing in mm')
+    parser.add_argument('--mm', '-m', nargs='+', type=float, default=[1.0],
+                        metavar='MM',
+                        help='Target voxel size in mm. One value for isotropic (default: 1), '
+                             'or three values for X Y Z.')
+    parser.add_argument('--spacing', nargs='+', type=float, dest='mm',
+                        help=argparse.SUPPRESS)  # backwards compat alias
     parser.add_argument('--out-suffix', default='_resampled', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
     add_common_args(parser)
