@@ -187,6 +187,7 @@ uroseg train --organ kidney --fold 0 --data-dir /scratch/uroseg_data
 `uroseg train` automatically:
 - Generates `dataset.json` from the model JSON
 - Sets `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` environment variables
+- Copies `nnUNetTrainerDAExt` from the auglab package into nnunetv2's trainer directory (required so nnU-Net can discover it)
 - Runs `nnUNetv2_plan_and_preprocess` (skipped if already done)
 - Runs `nnUNetv2_train` with `nnUNetTrainerDAExt` (AugLab's trainer subclass)
 
