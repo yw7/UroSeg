@@ -249,3 +249,31 @@ def test_preview_cli_with_seg(img_file, seg_file, tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert (out / 'img_preview.jpg').exists()
+
+
+# ── transform_seg2image ───────────────────────────────────────────────────────
+
+def test_transform_seg_matches_img_shape(img_file, seg_file, tmp_path):
+    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    # create a differently-shaped seg
+    data = np.zeros((10, 10, 10), dtype=np.int16)
+    data[2:8, 2:8, 2:8] = 1
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    seg_small = Image(data, affine, None)
+    ref = Image.load(img_file)
+    result = resample_seg_to_image(seg_small, ref)
+    assert result.data.shape == ref.data.shape
+
+
+def test_transform_seg2image_cli(img_file, seg_file, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'transform_seg2image',
+         '--seg', str(seg_file), '--img', str(img_file),
+         '--out-seg', str(out), '--seg-suffix', '_transformed'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'seg_transformed.nii.gz').exists()
