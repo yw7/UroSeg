@@ -8,7 +8,7 @@ from PIL import Image as PILImage
 from tqdm.contrib.concurrent import process_map
 
 from uroseg.utils.image import Image
-from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path
+from uroseg.utils.utils import add_common_args, collect_niftis
 
 LABEL_COLORS = [
     (255, 80, 80),

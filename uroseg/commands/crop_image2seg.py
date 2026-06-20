@@ -14,8 +14,14 @@ def crop_to_seg(img: Image, seg: Image) -> tuple[Image, Image]:
     bb = seg.bounding_box(label=None)
     if bb is None:
         return img.copy(), seg.copy()
-    cropped_img = Image(img.data[bb], img.affine.copy(), img.header)
-    cropped_seg = Image(seg.data[bb], seg.affine.copy(), seg.header)
+    # Shift the affine origin to the crop start voxel
+    start = np.array([s.start for s in bb], dtype=float)
+    img_affine = img.affine.copy()
+    img_affine[:3, 3] = img.affine[:3, :3] @ start + img.affine[:3, 3]
+    seg_affine = seg.affine.copy()
+    seg_affine[:3, 3] = seg.affine[:3, :3] @ start + seg.affine[:3, 3]
+    cropped_img = Image(img.data[bb], img_affine, img.header)
+    cropped_seg = Image(seg.data[bb], seg_affine, seg.header)
     return cropped_img, cropped_seg
 
 
@@ -68,6 +74,7 @@ def main() -> None:
         for i, s in zip(imgs, segs)
         if args.overwrite
         or not build_output_path(i, out_img_dir, args.img_prefix, args.img_suffix).exists()
+        or not build_output_path(s, out_seg_dir, args.seg_prefix, args.seg_suffix).exists()
     ]
 
     process_map(

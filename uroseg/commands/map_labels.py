@@ -18,10 +18,8 @@ def apply_map(data: np.ndarray, mapping: dict) -> np.ndarray:
     return result
 
 
-def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
+def process_one(pair: tuple[Path, Path], mapping: dict, args: argparse.Namespace) -> None:
     input_path, output_path = pair
-    with open(args.map) as f:
-        mapping = json.load(f)
     img = Image.load(input_path)
     img.data = apply_map(img.data, mapping)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,8 +37,10 @@ def main() -> None:
     args = parser.parse_args()
 
     pairs = build_pairs(args.seg, args.out, args.out_suffix, args.out_prefix, args.overwrite)
+    with open(args.map) as f:
+        mapping = json.load(f)
     process_map(
-        functools.partial(process_one, args=args),
+        functools.partial(process_one, mapping=mapping, args=args),
         pairs,
         max_workers=args.max_workers,
         disable=args.quiet,
