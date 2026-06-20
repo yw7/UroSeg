@@ -42,8 +42,8 @@ def main() -> None:
     )
     parser.add_argument("--organ", required=True,
                         help="Organ name matching resources/models/<organ>.json")
-    parser.add_argument("--fold", type=int, required=True,
-                        help="nnU-Net fold number (0–4)")
+    parser.add_argument("--fold", type=int, default=0,
+                        help="nnU-Net fold number (0–4, default: 0)")
     parser.add_argument("--auglab-config", default=None,
                         help="Path to AugLab augmentation config JSON (optional)")
     parser.add_argument("--gpus", type=int, default=1,
