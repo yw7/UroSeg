@@ -512,6 +512,50 @@ def test_make_preview_with_seg(img_file, seg_file):
     assert preview.dtype == np.uint8
 
 
+def test_make_preview_orient_ax(img_file):
+    """--orient ax extracts a slice from axis 2 (shape: [dim0, dim1, 3])."""
+    from uroseg.commands.preview_jpg import make_preview
+    img = Image.load(img_file)
+    # ax → axis 2; slice shape should be (dim0, dim1)
+    preview = make_preview(img.data, orient='ax', sliceloc=0.5)
+    assert preview.ndim == 3
+    assert preview.shape[2] == 3
+    # height and width match axes 0 and 1 of the volume
+    assert preview.shape[0] == img.data.shape[0]
+    assert preview.shape[1] == img.data.shape[1]
+    assert preview.dtype == np.uint8
+
+
+def test_make_preview_sliceloc_25(img_file):
+    """sliceloc=0.25 produces a slice at 25% of the sagittal axis."""
+    from uroseg.commands.preview_jpg import make_preview
+    img = Image.load(img_file)
+    preview = make_preview(img.data, orient='sag', sliceloc=0.25)
+    assert preview.ndim == 3
+    assert preview.dtype == np.uint8
+
+
+def test_parse_label_text_pairs():
+    """_parse_label_text parses label:text pairs."""
+    from uroseg.commands.preview_jpg import _parse_label_text
+    result = _parse_label_text(['1:L1', '2:L2'])
+    assert result == {1: 'L1', 2: 'L2'}
+
+
+def test_parse_label_text_json(tmp_path):
+    """_parse_label_text parses a JSON file."""
+    from uroseg.commands.preview_jpg import _parse_label_text
+    labels_json = tmp_path / 'labels.json'
+    labels_json.write_text(json.dumps({'1': 'L1', '2': 'L2'}))
+    result = _parse_label_text([str(labels_json)])
+    assert result == {1: 'L1', 2: 'L2'}
+
+
+def test_parse_label_text_empty():
+    from uroseg.commands.preview_jpg import _parse_label_text
+    assert _parse_label_text([]) == {}
+
+
 def test_preview_cli_no_seg(img_file, tmp_path):
     import subprocess, sys
     out = tmp_path / 'out'
@@ -522,7 +566,7 @@ def test_preview_cli_no_seg(img_file, tmp_path):
         capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
-    assert (out / 'img_preview.jpg').exists()
+    assert (out / 'img_preview_sag_0.5.jpg').exists()
 
 
 def test_preview_cli_with_seg(img_file, seg_file, tmp_path):
@@ -536,7 +580,38 @@ def test_preview_cli_with_seg(img_file, seg_file, tmp_path):
         capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
-    assert (out / 'img_preview.jpg').exists()
+    assert (out / 'img_preview_sag_0.5.jpg').exists()
+
+
+def test_preview_cli_orient_cor_sliceloc(img_file, tmp_path):
+    """CLI --orient cor --sliceloc 0.3 produces correctly named output."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'preview',
+         '--img', str(img_file), '--out', str(out),
+         '--out-suffix', '_preview', '--orient', 'cor', '--sliceloc', '0.3'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_preview_cor_0.3.jpg').exists()
+
+
+def test_preview_cli_label_text_right(img_file, seg_file, tmp_path):
+    """CLI --label-text-right 1:L1 is accepted and produces output."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'preview',
+         '--img', str(img_file), '--seg', str(seg_file),
+         '--out', str(out), '--out-suffix', '_preview',
+         '--label-text-right', '1:L1', '2:L2'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_preview_sag_0.5.jpg').exists()
 
 
 # ── cpdir ─────────────────────────────────────────────────────────────────────

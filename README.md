@@ -82,8 +82,8 @@ uroseg largest_component --seg seg.nii.gz --out seg_lc/
 uroseg crop --img img.nii.gz --seg seg.nii.gz \
             --out-img img_crop/ --out-seg seg_crop/
 
-# Generate JPG preview (3 orthogonal slices, optional seg overlay)
-uroseg preview --img img.nii.gz --seg seg.nii.gz --out previews/
+# Generate JPG preview (single slice, optional seg overlay)
+uroseg preview --img img.nii.gz --seg seg.nii.gz --out previews/ --orient sag --sliceloc 0.5
 
 # Resample segmentation to match reference image space (nearest-neighbour)
 uroseg transform_seg2image --seg seg.nii.gz --img ref.nii.gz --out-seg seg_transformed/
@@ -105,7 +105,7 @@ uroseg map                  --seg PATH --out PATH --map JSON [--out-suffix SUFFI
 uroseg resample             --img PATH --out PATH --spacing X Y Z [--out-suffix SUFFIX]
 uroseg reorient             --img PATH --out PATH [--orientation RAS] [--out-suffix SUFFIX]
 uroseg largest_component    --seg PATH --out PATH [--labels 1 2 3] [--out-suffix SUFFIX]
-uroseg preview              --img PATH [--seg PATH] --out PATH [--out-suffix SUFFIX]
+uroseg preview              --img PATH [--seg PATH] --out PATH [--orient sag|ax|cor] [--sliceloc 0.5] [--out-suffix SUFFIX]
 uroseg crop                 --img PATH --seg PATH --out-img PATH --out-seg PATH
 uroseg transform_seg2image  --seg PATH --img PATH --out-seg PATH [--seg-suffix SUFFIX]
 uroseg cpdir                --img PATH --out PATH [--out-suffix SUFFIX] [--out-prefix PREFIX]
