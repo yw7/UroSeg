@@ -431,8 +431,8 @@ uroseg install --model prostate [--data-dir PATH] [--store-export]
 uroseg install --all            [--data-dir PATH] [--store-export]
 ```
 1. Loads model JSON(s) via `get_model()` / `get_all_models()`
-2. Iterates over all `steps`; for each step reads `weights_url`; skips steps without one
-3. Downloads each step's zip to `data_path/nnUNet/exports/`
+2. Reads `weights_url` from each model JSON; skips models without one (community/unreleased)
+3. Downloads zip to `data_path/nnUNet/exports/`
 4. Extracts release ID from URL, extracts zip to `data_path/nnUNet/results/<release_id>/`
 5. Removes zip unless `--store-export` is passed
 
@@ -477,10 +477,9 @@ Table: command | anatomy | labels
 ### Full CLI reference
 
 ## Training
-1. Create resources/models/<organ>.json (labels, modality, nnunet_task)
-2. Place images in nnUNet_raw/DatasetXXX/imagesTr/ and labelsTr/
-3. Set env vars (nnUNet_raw, nnUNet_preprocessed, nnUNet_results)
-4. uroseg train --organ <organ> --dataset XXX --fold 0
+1. Create resources/models/<organ>.json (nnunet_task, channel_names, labels, optional regions_class_order)
+2. Place images in data_path/nnUNet/raw/DatasetXXX/imagesTr/ and labelsTr/
+3. uroseg train --organ <organ> --fold 0 [--data-dir PATH]
 
 ## Contributing — Adding a New Organ Model
 1. Add resources/models/<organ>.json
