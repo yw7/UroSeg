@@ -90,6 +90,13 @@ def main() -> None:
             check=True,
         )
 
+    # Register nnUNetTrainerDAExt into the nnunetv2 package directory.
+    # auglab ships the trainer file inside its own package; nnU-Net discovers
+    # trainers by scanning its own directory, so the file must be copied there
+    # before nnUNetv2_train is invoked.
+    from auglab.add_trainer import add_trainer as _add_trainer
+    _add_trainer("nnUNetTrainerDAExt")
+
     # Set AugLab config env var if provided
     if args.auglab_config:
         os.environ["AUGLAB_CONFIG"] = str(args.auglab_config)

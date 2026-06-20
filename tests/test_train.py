@@ -2,10 +2,18 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from unittest.mock import patch, call
+from unittest.mock import patch, call, MagicMock
 import numpy as np
 import nibabel as nib
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stub_nnunetv2(monkeypatch):
+    """nnunetv2 is not installed in the dev environment; stub it so
+    auglab.add_trainer can be imported without ModuleNotFoundError."""
+    import sys
+    monkeypatch.setitem(sys.modules, "nnunetv2", MagicMock())
 
 
 @pytest.fixture
@@ -103,7 +111,8 @@ def test_train_generates_dataset_json(tmp_path):
     preprocessed_dir = tmp_path / "nnUNet" / "preprocessed" / "Dataset001_Prostate"
     preprocessed_dir.mkdir(parents=True)
 
-    with patch("uroseg.commands.train.subprocess.run") as mock_run, \
+    with patch("auglab.add_trainer.add_trainer"), \
+         patch("uroseg.commands.train.subprocess.run") as mock_run, \
          patch("uroseg.utils.utils.get_model") as mock_get_model:
 
         mock_get_model.return_value = {
@@ -144,7 +153,8 @@ def test_train_calls_nnunet_train(tmp_path):
     preprocessed_dir = tmp_path / "nnUNet" / "preprocessed" / "Dataset010_Bladder"
     preprocessed_dir.mkdir(parents=True)
 
-    with patch("uroseg.commands.train.subprocess.run") as mock_run, \
+    with patch("auglab.add_trainer.add_trainer"), \
+         patch("uroseg.commands.train.subprocess.run") as mock_run, \
          patch("uroseg.utils.utils.get_model") as mock_get_model:
 
         mock_get_model.return_value = {
@@ -186,7 +196,8 @@ def test_train_skips_preprocess_if_done(tmp_path):
     # Already preprocessed
     (tmp_path / "nnUNet" / "preprocessed" / "Dataset010_Bladder").mkdir(parents=True)
 
-    with patch("uroseg.commands.train.subprocess.run") as mock_run, \
+    with patch("auglab.add_trainer.add_trainer"), \
+         patch("uroseg.commands.train.subprocess.run") as mock_run, \
          patch("uroseg.utils.utils.get_model") as mock_get_model:
 
         mock_get_model.return_value = {
@@ -230,7 +241,8 @@ def test_train_sets_auglab_config_env(tmp_path):
         if cmd[0] == "nnUNetv2_train":
             captured_env["AUGLAB_CONFIG"] = os.environ.get("AUGLAB_CONFIG")
 
-    with patch("uroseg.commands.train.subprocess.run", side_effect=capture_run), \
+    with patch("auglab.add_trainer.add_trainer"), \
+         patch("uroseg.commands.train.subprocess.run", side_effect=capture_run), \
          patch("uroseg.utils.utils.get_model") as mock_get_model:
 
         mock_get_model.return_value = {
