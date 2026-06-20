@@ -166,3 +166,39 @@ def test_largest_component_cli(seg_file, tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert (out / 'seg_lc.nii.gz').exists()
+
+
+# ── crop_image2seg ────────────────────────────────────────────────────────────
+
+def test_crop_reduces_size(img_file, seg_file, tmp_path):
+    from uroseg.commands.crop_image2seg import crop_to_seg
+    img = Image.load(img_file)
+    seg = Image.load(seg_file)
+    cropped_img, cropped_seg = crop_to_seg(img, seg)
+    assert cropped_img.data.shape[0] <= img.data.shape[0]
+    assert cropped_seg.data.shape == cropped_img.data.shape
+
+
+def test_crop_preserves_seg_labels(img_file, seg_file, tmp_path):
+    from uroseg.commands.crop_image2seg import crop_to_seg
+    img = Image.load(img_file)
+    seg = Image.load(seg_file)
+    _, cropped_seg = crop_to_seg(img, seg)
+    assert 1 in np.unique(cropped_seg.data)
+
+
+def test_crop_cli(img_file, seg_file, tmp_path):
+    import subprocess, sys
+    out_img = tmp_path / 'out_img'
+    out_seg = tmp_path / 'out_seg'
+    out_img.mkdir(); out_seg.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'crop',
+         '--img', str(img_file), '--seg', str(seg_file),
+         '--out-img', str(out_img), '--out-seg', str(out_seg),
+         '--img-suffix', '_crop', '--seg-suffix', '_crop'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out_img / 'img_crop.nii.gz').exists()
+    assert (out_seg / 'seg_crop.nii.gz').exists()
