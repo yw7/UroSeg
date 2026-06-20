@@ -73,3 +73,30 @@ def test_map_labels_cli(seg_file, map_json, tmp_path):
     assert out_file.exists()
     img = Image.load(out_file)
     assert img.data[3, 3, 3] == 10
+
+
+# ── resample ──────────────────────────────────────────────────────────────────
+
+def test_resample_changes_spacing(img_file, tmp_path):
+    from uroseg.commands.resample import process_one
+    import argparse
+    out = tmp_path / 'resampled.nii.gz'
+    args = argparse.Namespace(spacing=[2.0, 2.0, 2.0], overwrite=True)
+    process_one((img_file, out), args)
+    assert out.exists()
+    img = Image.load(out)
+    assert img.data.ndim == 3
+
+
+def test_resample_cli(img_file, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'resample',
+         '--img', str(img_file), '--out', str(out),
+         '--spacing', '2', '2', '2', '--out-suffix', '_resampled'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_resampled.nii.gz').exists()
