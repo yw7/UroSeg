@@ -15,7 +15,7 @@ dependencies = [
     "scipy",
     "pillow",
     "SimpleITK",
-    "auglab",
+    "auglab @ git+https://github.com/neuropoly/AugLab.git@r20260615",
     "nnunetv2",
 ]
 
