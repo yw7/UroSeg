@@ -270,6 +270,87 @@ def test_largest_component_cli(seg_file, tmp_path):
     assert (out / 'seg_lc.nii.gz').exists()
 
 
+def test_keep_largest_component_binarize(tmp_path):
+    """--binarize: keep only the single largest connected region across all labels."""
+    from uroseg.commands.largest_component import keep_largest_component
+    data = np.zeros((30, 30, 30), dtype=np.int16)
+    # Large multi-label blob (connected)
+    data[10:20, 10:20, 10:20] = 1
+    data[10:20, 10:20, 20:25] = 2   # adjacent to label-1 block, forms one big region
+    # Small isolated blob
+    data[1:3, 1:3, 1:3] = 1
+    result = keep_largest_component(data, binarize=True)
+    # Large region should be kept with original label values
+    assert result[15, 15, 15] == 1
+    assert result[15, 15, 22] == 2
+    # Small isolated blob should be removed
+    assert result[1, 1, 1] == 0
+
+
+def test_keep_largest_component_dilate(tmp_path):
+    """--dilate connects nearby components then masks back to original voxels."""
+    from uroseg.commands.largest_component import keep_largest_component
+    data = np.zeros((30, 30, 30), dtype=np.int16)
+    # Two small blobs of label 1 separated by a 2-voxel gap
+    data[10:13, 10:13, 10:13] = 1   # left blob  (~27 voxels)
+    data[10:13, 10:13, 15:18] = 1   # right blob (~27 voxels), gap of 2 voxels
+    # Tiny isolated blob far away
+    data[1:2, 1:2, 1:2] = 1         # 1 voxel
+    # Without dilation the two main blobs are separate CCs; the larger one wins.
+    # With dilate=3 the two main blobs merge and together dominate the tiny one.
+    result = keep_largest_component(data, dilate=3)
+    # Both main blobs should survive (they merge under dilation)
+    assert result[11, 11, 11] == 1
+    assert result[11, 11, 16] == 1
+    # Tiny isolated blob should be removed
+    assert result[1, 1, 1] == 0
+    # Background voxels in the gap must remain zero (dilation is undone)
+    assert result[10, 10, 13] == 0
+
+
+def test_keep_largest_component_26connectivity():
+    """Diagonal neighbours (face-corner touching) should be connected with 26-connectivity."""
+    from uroseg.commands.largest_component import keep_largest_component
+    data = np.zeros((10, 10, 10), dtype=np.int16)
+    # Two voxels touching only at a corner (diagonal in all three axes)
+    data[3, 3, 3] = 1
+    data[4, 4, 4] = 1   # 26-connected to (3,3,3) but NOT 6-connected
+    result = keep_largest_component(data)
+    # Both voxels belong to the same (and only) CC, so both are kept
+    assert result[3, 3, 3] == 1
+    assert result[4, 4, 4] == 1
+
+
+def test_largest_component_binarize_cli(seg_file, tmp_path):
+    """CLI --binarize flag produces valid output."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'largest_component',
+         '--seg', str(seg_file), '--out', str(out),
+         '--out-suffix', '_lc', '--binarize'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'seg_lc.nii.gz').exists()
+
+
+def test_largest_component_dilate_cli(seg_file, tmp_path):
+    """CLI --dilate flag produces valid output."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'largest_component',
+         '--seg', str(seg_file), '--out', str(out),
+         '--out-suffix', '_lc', '--dilate', '2'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'seg_lc.nii.gz').exists()
+
+
 # ── crop_image2seg ────────────────────────────────────────────────────────────
 
 def test_crop_reduces_size(img_file, seg_file, tmp_path):
