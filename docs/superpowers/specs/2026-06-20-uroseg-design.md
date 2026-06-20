@@ -12,7 +12,7 @@ UroSeg is a Python package for automated segmentation of urological anatomy from
 - Single `uroseg` CLI entry point with subcommands
 - Independent per-organ models, each capable of multiple sub-labels
 - Modality-agnostic (MRI, CT, or any — declared per model config)
-- User brings their own data in nnU-Net format for training
+- User creates a model JSON first; `uroseg train` auto-generates nnU-Net's `dataset.json` from it
 - Consistent, readable tool code — unity over abstraction
 - No bundled dataset download/prepare scripts
 
@@ -100,18 +100,21 @@ Each organ model is a JSON file in `uroseg/resources/models/`:
     "2": "prostate_cz",
     "3": "prostate_afs"
   },
-  "weights_url": "https://..."    // filled when trained weights are hosted; omit for community/unreleased models
+  "weights_filename": "prostate.zip"    // GitHub Release asset name; omit for community/unreleased models
 }
 ```
 
 Fields:
 - `name` — matches the filename stem and the CLI subcommand token
-- `modality` — informational; nnU-Net's `dataset.json` is authoritative for training
+- `modality` — channel names passed to nnU-Net's `dataset.json` (e.g. `["MRI-T2"]`); used by `uroseg train` to auto-generate `dataset.json`
 - `nnunet_task` — nnU-Net dataset/task identifier used for predict and train
-- `labels` — label ID → anatomical name mapping
-- `weights_url` — URL for `uroseg install --model <name>` to download from
+- `labels` — label ID → anatomical name mapping; used to auto-generate `dataset.json` and for `uroseg map`
+- `weights_filename` — filename of the weights archive on the GitHub Release (e.g. `prostate_v1.0.0.zip`); URL is constructed at runtime from the package version (see Weight URLs section)
 
-Adding a new organ requires only: training a model, adding one JSON file, and opening a PR.
+**Training workflow — model JSON first:**
+The user creates `resources/models/<organ>.json` before training. `uroseg train` reads it and auto-generates the nnU-Net `dataset.json` (label map, channel names, num_training) so the user never writes `dataset.json` by hand. The user only needs to place raw images and segmentations in `nnUNet_raw/DatasetXXX/imagesTr/` and `labelsTr/`.
+
+Adding a new organ requires only: creating the model JSON, placing data, running `uroseg train`, and opening a PR.
 
 ---
 
@@ -271,20 +274,33 @@ Python replacement for `scripts/train.sh`. Wraps nnU-Net with AugLab online augm
 ### CLI
 ```
 uroseg train \
+  --organ prostate \
   --dataset DATASET_ID \
   --fold N \
-  [--organ prostate] \
   [--auglab-config auglab.json] \
   [--gpus 1] \
   [--nnunet-dir /path/to/nnunet_data]
 ```
 
 ### Steps executed internally
-1. Validate that `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars are set (or use `--nnunet-dir`)
-2. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
-3. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
-4. Pass `--auglab-config` JSON to AugLab trainer via nnU-Net's trainer config mechanism
-5. On completion, print instructions for registering the model in `resources/models/<organ>.json`
+1. Load `resources/models/<organ>.json`
+2. Validate that `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars are set (or use `--nnunet-dir`)
+3. Auto-generate `nnUNet_raw/DatasetXXX/dataset.json` from the model JSON (labels, channel names, num_training from imagesTr count)
+4. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
+5. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
+6. If `--auglab-config` is provided, set `AUGLAB_CONFIG` env var before invoking nnU-Net
+7. On completion, print the `nnUNet_results/` path where the trained model is stored
+
+### Trained model storage
+By default, nnU-Net stores trained models in `$nnUNet_results/DatasetXXX_<name>/nnUNetTrainerDAExt__nnUNetPlans__3d_fullres/`. This path is set via the `nnUNet_results` environment variable.
+
+To use a different location, set `nnUNet_results` before training:
+```bash
+export nnUNet_results=/path/to/my/models
+uroseg train --organ prostate --dataset 1 --fold 0
+```
+
+For inference, the same `nnUNet_results` variable is used by `uroseg predict_nnunet` to locate the model.
 
 ### AugLab integration
 AugLab's `nnUNetTrainerDAExt` is specified via nnU-Net's `--trainer` flag — no monkey-patching. AugLab is a required dependency. When `--auglab-config` is provided, `uroseg train` sets the `AUGLAB_CONFIG` environment variable to the JSON path before invoking nnU-Net; the AugLab trainer reads this variable internally. If `--auglab-config` is omitted, AugLab trainer defaults are used.
@@ -305,11 +321,11 @@ dependencies = [
     "pillow",
     "SimpleITK",
     "auglab",
+    "nnunetv2",
 ]
-
-[project.optional-dependencies]
-nnunetv2 = ["nnunetv2"]
 ```
+
+nnunetv2 is a required dependency — it is the core inference and training backbone.
 
 ### Install flow (from README)
 ```bash
@@ -318,8 +334,8 @@ pip install light-the-torch
 ltt install torch
 
 # 2. Install UroSeg
-pip install uroseg[nnunetv2]          # standard
-pip install -e ".[nnunetv2]"          # development
+pip install uroseg                # standard
+pip install -e "."                # development
 
 # 3. Download model weights
 uroseg install --model prostate
@@ -327,6 +343,36 @@ uroseg install --all
 ```
 
 light-the-torch is not a dependency of UroSeg — it is a user-side installation helper documented in the README only.
+
+---
+
+## Weight URLs & Versioned Releases
+
+Pre-trained model weights are distributed as GitHub Release assets, version-pinned to the UroSeg package version. This ensures that installed weights always match the model architecture of the installed package.
+
+### How it works
+`uroseg/__init__.py` defines the base URL using the package version:
+```python
+from importlib.metadata import version
+__version__ = version("uroseg")
+WEIGHTS_BASE_URL = f"https://github.com/<org>/uroseg/releases/download/v{__version__}/"
+```
+
+Each model JSON's `weights_filename` field holds the archive name (e.g. `prostate.zip`). `uroseg install` constructs the full URL at runtime:
+```python
+url = WEIGHTS_BASE_URL + model["weights_filename"]
+```
+
+### Downloaded weights storage
+Weights are downloaded to `~/.uroseg/weights/` by default. Override with:
+```bash
+export UROSEG_WEIGHTS_DIR=/path/to/weights
+```
+
+`uroseg install` downloads and extracts weights there. `uroseg predict_nnunet` and inference commands check `UROSEG_WEIGHTS_DIR` first, then fall back to `nnUNet_results` for locally trained models.
+
+### Release workflow
+Each GitHub release tags a version and attaches weights archives as release assets. The `weights_filename` in each model JSON must match the asset name on that release. Community/unreleased models omit `weights_filename` and are not auto-downloaded.
 
 ---
 
@@ -367,14 +413,16 @@ Table: command | anatomy | labels
 ### Full CLI reference
 
 ## Training
-1. Prepare data in nnU-Net format
-2. Set env vars
-3. uroseg train ...
+1. Create resources/models/<organ>.json (labels, modality, nnunet_task)
+2. Place images in nnUNet_raw/DatasetXXX/imagesTr/ and labelsTr/
+3. Set env vars (nnUNet_raw, nnUNet_preprocessed, nnUNet_results)
+4. uroseg train --organ <organ> --dataset XXX --fold 0
 
 ## Contributing — Adding a New Organ Model
-1. Train with uroseg train
-2. Add resources/models/<organ>.json
-3. Submit PR
+1. Add resources/models/<organ>.json
+2. Train with uroseg train
+3. Upload weights archive to GitHub Release
+4. Submit PR
 ```
 
 ---
