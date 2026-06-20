@@ -251,6 +251,40 @@ def test_preview_cli_with_seg(img_file, seg_file, tmp_path):
     assert (out / 'img_preview.jpg').exists()
 
 
+# ── cpdir ─────────────────────────────────────────────────────────────────────
+
+def test_cpdir_copies_files(nifti_folder, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'cpdir',
+         '--img', str(nifti_folder), '--out', str(out), '--out-suffix', ''],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(list(out.glob('*.nii.gz'))) == 3
+
+
+def test_cpdir_skips_existing_without_overwrite(nifti_folder, tmp_path):
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    # first copy
+    subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'cpdir',
+         '--img', str(nifti_folder), '--out', str(out), '--out-suffix', ''],
+        capture_output=True
+    )
+    # second copy without --overwrite should skip
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'cpdir',
+         '--img', str(nifti_folder), '--out', str(out), '--out-suffix', ''],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0
+
+
 # ── transform_seg2image ───────────────────────────────────────────────────────
 
 def test_transform_seg_matches_img_shape(img_file, seg_file, tmp_path):
