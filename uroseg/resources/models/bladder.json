@@ -1,0 +1,11 @@
+{
+  "name": "bladder",
+  "description": "Urinary bladder (CT)",
+  "nnunet_task": "Dataset010_Bladder",
+  "channel_names": {"0": "CT"},
+  "labels": {
+    "0": "background",
+    "1": "bladder"
+  },
+  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
+}

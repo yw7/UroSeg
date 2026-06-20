@@ -1,0 +1,15 @@
+{
+  "name": "prostate",
+  "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
+  "nnunet_task": "Dataset001_Prostate",
+  "channel_names": {"0": "MRI-T2"},
+  "labels": {
+    "0": "background",
+    "1": "prostate",
+    "2": "prostate_pz",
+    "3": "prostate_cz",
+    "4": "prostate_afs"
+  },
+  "regions_class_order": [1, 2, 3, 4],
+  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
+}
