@@ -39,3 +39,14 @@ def test_unknown_flag_exits_nonzero():
 def test_unknown_organ_exits_nonzero():
     result = run_uroseg('nonexistent_organ', '--img', 'x', '--out', 'y')
     assert result.returncode != 0
+
+
+def test_list_cli():
+    import subprocess, sys
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'list'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'prostate' in result.stdout
+    assert 'bladder' in result.stdout
