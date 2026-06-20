@@ -95,7 +95,7 @@ Each organ model is a JSON file in `uroseg/resources/models/`. Each model is a *
   "name": "bladder",
   "description": "Urinary bladder (CT)",
   "nnunet_task": "Dataset010_Bladder",
-  "modality": ["CT"],
+  "channel_names": {"0": "CT"},
   "labels": {
     "0": "background",
     "1": "bladder"
@@ -111,7 +111,7 @@ A single model outputs the whole prostate and its internal zones simultaneously:
   "name": "prostate",
   "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
   "nnunet_task": "Dataset001_Prostate",
-  "modality": ["MRI-T2"],
+  "channel_names": {"0": "MRI-T2"},
   "labels": {
     "0": "background",
     "1": "prostate",
@@ -130,7 +130,7 @@ A single model outputs the whole prostate and its internal zones simultaneously:
 - `name` — matches filename stem and CLI subcommand token
 - `description` — human-readable summary of all labels
 - `nnunet_task` — nnU-Net dataset folder name; used for train, predict, and install
-- `modality` — list of input channel names for nnU-Net's `dataset.json` `channel_names`
+- `channel_names` — dict mapping channel index → name, passed directly to nnU-Net's `dataset.json` `channel_names` (e.g. `{"0": "CT"}` or `{"0": "MRI-T2"}`); nnU-Net uses `"CT"` for CT-specific normalization, anything else gets z-score per case
 - `labels` — label ID → anatomical name; used to auto-generate `dataset.json` and for `uroseg map`
 - `regions_class_order` — (optional) list of label IDs enabling nnU-Net region-based training for hierarchical/overlapping labels
 - `weights_url` — full GitHub Release zip URL (optional; omit for community/unreleased models); release ID extracted from URL determines results subdirectory
@@ -309,7 +309,7 @@ uroseg train \
 1. Load `resources/models/<organ>.json`
 2. Resolve `data_path` via `--data-dir` → `UROSEG_DATA` → package default
 3. Set `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` env vars from `data_path` automatically
-4. Auto-generate `data_path/nnUNet/raw/<nnunet_task>/dataset.json` from the model JSON (labels, channel names, `regions_class_order` if present, num_training from `imagesTr/` count)
+4. Auto-generate `data_path/nnUNet/raw/<nnunet_task>/dataset.json` from the model JSON (`channel_names`, `labels`, `regions_class_order` if present, num_training from `imagesTr/` count)
 5. Run `nnUNetv2_plan_and_preprocess -d DATASET_ID` if not already done
 6. Run `nnUNetv2_train DATASET_ID 3d_fullres FOLD --trainer nnUNetTrainerDAExt`
 7. If `--auglab-config` is provided, set `AUGLAB_CONFIG` env var before invoking nnU-Net
