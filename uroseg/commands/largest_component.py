@@ -45,6 +45,7 @@ def _largest_component_for_label(
         mask = (data == lbl).astype(np.uint8)
 
     if dilate > 0:
+        # Explicit 6-connectivity structure (self-documenting; matches scipy default)
         struct = ndi.iterate_structure(ndi.generate_binary_structure(3, 1), dilate)
         work = ndi.binary_dilation(mask, structure=struct).astype(np.uint8)
     else:

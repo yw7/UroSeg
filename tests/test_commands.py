@@ -364,11 +364,14 @@ def test_keep_largest_component_dilate(tmp_path):
 
 
 def test_dilate_uses_6conn_not_26conn():
-    """dilate=1 uses 6-connectivity: a 1-voxel diagonal gap is NOT bridged.
+    """Dilation uses 6-connectivity (not 26-connectivity), ensuring it cannot be accidentally changed.
 
     Two equal-size blobs separated by a 1-voxel diagonal gap:
     - Under 6-conn dilation (correct): gap not bridged → 2 CCs, one is removed.
-    - Under 26-conn dilation (wrong): corner-adjacent dilation bridges gap → 1 CC.
+    - Under 26-conn dilation (would change behavior): corner-adjacent dilation would bridge gap → 1 CC.
+
+    This test documents that dilation employs explicit 6-connectivity structure (self-documenting;
+    matches scipy default) and ensures the behavior remains stable.
     """
     from uroseg.commands.largest_component import keep_largest_component
     data = np.zeros((25, 25, 25), dtype=np.int16)

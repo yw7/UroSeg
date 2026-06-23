@@ -103,7 +103,7 @@ All commands support `-r`/`--overwrite`, `-w`/`--max-workers N`, and `-q`/`--qui
 uroseg <organ>              -i/--img PATH  -o/--out PATH  [-f/--fold N] [-d/--device cuda|cpu|mps]
 uroseg map                  -s/--seg PATH  -o/--out PATH  -m/--map JSON|KEY:VAL ...
 uroseg resample             -i/--img PATH  -o/--out PATH  -m/--mm X [Y Z]
-uroseg reorient             -i/--img PATH  -o/--out PATH  [--orientation RAS]
+uroseg reorient             -i/--img PATH  -o/--out PATH
 uroseg largest_component    -s/--seg PATH  -o/--out PATH  [-l/--labels 1 2 3]
 uroseg preview              -i/--img PATH [-s/--seg PATH] -o/--out PATH [-t/--orient sag|ax|cor] [-l/--sliceloc 0.5]
 uroseg crop                 -i/--img PATH  -s/--seg PATH  -o/--out PATH  [-m/--margin N]
