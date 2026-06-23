@@ -164,9 +164,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Generate a JPG preview image (single slice) of NIfTI files.'
     )
-    parser.add_argument('--img', required=True, help='Input image file or folder')
-    parser.add_argument('--seg', default=None, help='Input seg file or folder (optional)')
-    parser.add_argument('--out', required=True, help='Output folder')
+    parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
+    parser.add_argument('--seg', '-s', default=None, help='Input seg file or folder (optional)')
+    parser.add_argument('--out', '-o', required=True, help='Output folder')
     parser.add_argument('--out-suffix', default='_preview', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
     parser.add_argument(

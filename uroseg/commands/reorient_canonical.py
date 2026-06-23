@@ -21,8 +21,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Reorient NIfTI images to a canonical orientation.'
     )
-    parser.add_argument('--img', required=True, help='Input image file or folder')
-    parser.add_argument('--out', required=True, help='Output file or folder')
+    parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
+    parser.add_argument('--out', '-o', required=True, help='Output file or folder')
     parser.add_argument('--orientation', default='RAS',
                         help='Target orientation code (default: RAS)')
     parser.add_argument('--out-suffix', default='_reoriented', help='Output filename suffix')

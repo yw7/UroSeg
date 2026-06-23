@@ -20,8 +20,8 @@ def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Resample image to target voxel spacing.')
-    parser.add_argument('--img', required=True, help='Input image file or folder')
-    parser.add_argument('--out', required=True, help='Output file or folder')
+    parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
+    parser.add_argument('--out', '-o', required=True, help='Output file or folder')
     parser.add_argument('--mm', '-m', nargs='+', type=float, default=[1.0],
                         metavar='MM',
                         help='Target voxel size in mm. One value for isotropic (default: 1), '

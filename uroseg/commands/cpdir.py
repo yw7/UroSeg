@@ -20,8 +20,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Copy NIfTI files from one folder to another with optional renaming.'
     )
-    parser.add_argument('--img', required=True, help='Input file or folder')
-    parser.add_argument('--out', required=True, help='Output folder')
+    parser.add_argument('--img', '-i', required=True, help='Input file or folder')
+    parser.add_argument('--out', '-o', required=True, help='Output folder')
     parser.add_argument('--out-suffix', default='', help='Output filename suffix (default: none)')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix (default: none)')
     add_common_args(parser)

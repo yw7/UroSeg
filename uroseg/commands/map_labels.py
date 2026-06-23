@@ -71,8 +71,8 @@ def process_one(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Remap label IDs in segmentation files.')
-    parser.add_argument('--seg', required=True, help='Input seg file or folder')
-    parser.add_argument('--out', required=True, help='Output file or folder')
+    parser.add_argument('--seg', '-s', required=True, help='Input seg file or folder')
+    parser.add_argument('--out', '-o', required=True, help='Output file or folder')
     parser.add_argument(
         '--map', '-m', nargs='+', default=[],
         help='Label mapping: path to .json file OR space-separated key:value pairs '

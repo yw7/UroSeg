@@ -106,8 +106,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Resample segmentation to match reference image space.'
     )
-    parser.add_argument('--seg', required=True, help='Input seg file or folder')
-    parser.add_argument('--img', required=True, help='Reference image file or folder')
+    parser.add_argument('--seg', '-s', required=True, help='Input seg file or folder')
+    parser.add_argument('--img', '-i', required=True, help='Reference image file or folder')
     parser.add_argument('--out-seg', required=True, help='Output seg folder')
     parser.add_argument('--seg-suffix', default='_transformed', help='Output seg suffix')
     parser.add_argument('--seg-prefix', default='', help='Output seg prefix')

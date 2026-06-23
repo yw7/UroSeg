@@ -7,11 +7,11 @@ from importlib.resources import files
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('--overwrite', action='store_true',
+    parser.add_argument('--overwrite', '-r', action='store_true',
                         help='Overwrite existing outputs (default: skip if exists)')
-    parser.add_argument('--max-workers', type=int, default=1,
+    parser.add_argument('--max-workers', '-w', type=int, default=1,
                         help='Number of parallel workers (default: 1)')
-    parser.add_argument('--quiet', action='store_true',
+    parser.add_argument('--quiet', '-q', action='store_true',
                         help='Suppress progress bar and non-error output')
 
 

@@ -117,9 +117,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Keep only the largest connected component per label in a segmentation.'
     )
-    parser.add_argument('--seg', required=True, help='Input seg file or folder')
-    parser.add_argument('--out', required=True, help='Output file or folder')
-    parser.add_argument('--labels', nargs='+', type=int, default=None,
+    parser.add_argument('--seg', '-s', required=True, help='Input seg file or folder')
+    parser.add_argument('--out', '-o', required=True, help='Output file or folder')
+    parser.add_argument('--labels', '-l', nargs='+', type=int, default=None,
                         help='Label IDs to process (default: all non-zero)')
     parser.add_argument('--out-suffix', default='_largest', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')

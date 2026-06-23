@@ -48,15 +48,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description='Crop image and segmentation to the bounding box of the segmentation.'
     )
-    parser.add_argument('--img', required=True, help='Input image file or folder')
-    parser.add_argument('--seg', required=True, help='Input seg file or folder')
+    parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
+    parser.add_argument('--seg', '-s', required=True, help='Input seg file or folder')
     parser.add_argument('--out-img', required=True, help='Output image folder')
     parser.add_argument('--out-seg', required=True, help='Output seg folder')
     parser.add_argument('--img-suffix', default='_crop', help='Suffix for output images')
     parser.add_argument('--img-prefix', default='', help='Prefix for output images')
     parser.add_argument('--seg-suffix', default='_crop', help='Suffix for output segs')
     parser.add_argument('--seg-prefix', default='', help='Prefix for output segs')
-    parser.add_argument('--margin', type=int, default=0, metavar='N',
+    parser.add_argument('--margin', '-m', type=int, default=0, metavar='N',
                         help='Voxels of margin to add around the segmentation bounding box '
                              '(default: 0)')
     add_common_args(parser)
