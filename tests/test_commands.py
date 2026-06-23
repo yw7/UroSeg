@@ -363,6 +363,26 @@ def test_keep_largest_component_dilate(tmp_path):
     assert result[10, 10, 13] == 0
 
 
+def test_dilate_uses_6conn_not_26conn():
+    """dilate=1 uses 6-connectivity: a 1-voxel diagonal gap is NOT bridged.
+
+    Two equal-size blobs separated by a 1-voxel diagonal gap:
+    - Under 6-conn dilation (correct): gap not bridged → 2 CCs, one is removed.
+    - Under 26-conn dilation (wrong): corner-adjacent dilation bridges gap → 1 CC.
+    """
+    from uroseg.commands.largest_component import keep_largest_component
+    data = np.zeros((25, 25, 25), dtype=np.int16)
+    data[3:8, 3:8, 3:8] = 1    # blob A (5x5x5 = 125 voxels)
+    data[9:14, 9:14, 9:14] = 1  # blob B (5x5x5 = 125 voxels), 1-voxel diagonal gap
+    # Blob A corner: (7,7,7). Blob B corner: (9,9,9). Gap voxel: (8,8,8).
+    # 6-conn: dilation from A reaches (8,7,7),(7,8,7),(7,7,8) but NOT (8,8,8).
+    # 26-conn: dilation from A would reach (8,8,8) — bridging the diagonal gap.
+    result = keep_largest_component(data, dilate=1)
+    # With 6-conn: two disconnected CCs of equal size → tie-break keeps blob A (first labeled)
+    assert result[5, 5, 5] == 1    # blob A center kept
+    assert result[11, 11, 11] == 0  # blob B removed (not merged)
+
+
 def test_keep_largest_component_26connectivity():
     """Diagonal neighbours (face-corner touching) should be connected with 26-connectivity."""
     from uroseg.commands.largest_component import keep_largest_component
