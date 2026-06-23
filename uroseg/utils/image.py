@@ -56,6 +56,26 @@ class Image:
         maxs = nonzero.max(axis=0)
         return tuple(slice(int(mn), int(mx) + 1) for mn, mx in zip(mins, maxs))
 
+    def crop_to_seg(self, seg: 'Image', margin: int = 0) -> 'Image':
+        seg_data = np.round(seg.data).astype(np.uint8)
+        coords = np.argwhere(seg_data != 0)
+        if len(coords) == 0:
+            return self.copy()
+        mins = coords.min(axis=0)
+        maxs = coords.max(axis=0)
+        shape = np.array(seg_data.shape)
+        lo = np.maximum(mins - margin, 0)
+        hi = np.minimum(maxs + margin, shape - 1)
+        slices = tuple(slice(int(lo[i]), int(hi[i]) + 1) for i in range(3))
+        nib_img = nib.Nifti1Image(self.data, self.affine, self.header)
+        cropped = nib_img.slicer[slices]
+        return Image(np.asanyarray(cropped.dataobj), cropped.affine, cropped.header)
+
+    def as_canonical(self) -> 'Image':
+        nib_img = nib.Nifti1Image(self.data, self.affine, self.header)
+        canonical = nib.as_closest_canonical(nib_img)
+        return Image(np.asanyarray(canonical.dataobj), canonical.affine, canonical.header)
+
 
 def save_nifti_image(data: np.ndarray, affine: np.ndarray, header, path) -> None:
     """Save a NIfTI image preserving integer dtype with overflow rescaling.
