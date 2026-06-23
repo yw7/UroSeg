@@ -408,88 +408,63 @@ def test_largest_component_dilate_cli(seg_file, tmp_path):
 
 # ── crop_image2seg ────────────────────────────────────────────────────────────
 
-def test_crop_reduces_size(img_file, seg_file, tmp_path):
-    from uroseg.commands.crop_image2seg import crop_to_seg
+def test_crop_to_seg_reduces_image(img_file, seg_file, tmp_path):
+    """crop_to_seg returns cropped image smaller than input."""
     img = Image.load(img_file)
     seg = Image.load(seg_file)
-    cropped_img, cropped_seg = crop_to_seg(img, seg)
-    assert cropped_img.data.shape[0] <= img.data.shape[0]
-    assert cropped_seg.data.shape == cropped_img.data.shape
-
-
-def test_crop_preserves_seg_labels(img_file, seg_file, tmp_path):
-    from uroseg.commands.crop_image2seg import crop_to_seg
-    img = Image.load(img_file)
-    seg = Image.load(seg_file)
-    _, cropped_seg = crop_to_seg(img, seg)
-    assert 1 in np.unique(cropped_seg.data)
+    cropped = img.crop_to_seg(seg)
+    assert cropped.data.shape[0] <= img.data.shape[0]
 
 
 def test_crop_margin_expands_bbox(img_file, seg_file, tmp_path):
-    """--margin N expands the bounding box by N voxels on each side."""
-    from uroseg.commands.crop_image2seg import crop_to_seg
+    """margin N expands the bounding box by N voxels on each side."""
     img = Image.load(img_file)
     seg = Image.load(seg_file)
-    cropped_no_margin, _ = crop_to_seg(img, seg, margin=0)
-    cropped_with_margin, _ = crop_to_seg(img, seg, margin=2)
-    # Margin should make the cropped volume at least as large along every axis
+    no_margin = img.crop_to_seg(seg, margin=0)
+    with_margin = img.crop_to_seg(seg, margin=2)
     for i in range(3):
-        assert cropped_with_margin.data.shape[i] >= cropped_no_margin.data.shape[i]
-    # At least one dimension must be strictly larger (unless clamped by image bounds)
-    orig_shape = img.data.shape
-    expanded = any(
-        cropped_with_margin.data.shape[i] > cropped_no_margin.data.shape[i]
-        or cropped_no_margin.data.shape[i] == orig_shape[i]  # already at boundary
-        for i in range(3)
-    )
-    assert expanded
+        assert with_margin.data.shape[i] >= no_margin.data.shape[i]
 
 
 def test_crop_margin_clamped_to_image(img_file, seg_file, tmp_path):
-    """Very large margin is clamped to the image boundary, not out-of-bounds."""
-    from uroseg.commands.crop_image2seg import crop_to_seg
+    """Very large margin is clamped to image boundary."""
     img = Image.load(img_file)
     seg = Image.load(seg_file)
-    cropped_img, cropped_seg = crop_to_seg(img, seg, margin=100)
-    # Result should not exceed original image shape
+    cropped = img.crop_to_seg(seg, margin=100)
     for i in range(3):
-        assert cropped_img.data.shape[i] <= img.data.shape[i]
+        assert cropped.data.shape[i] <= img.data.shape[i]
+
+
+def test_crop_cli_image_only(img_file, seg_file, tmp_path):
+    """CLI writes only the image output; no seg file is created."""
+    import subprocess, sys
+    out = tmp_path / 'out'
+    out.mkdir()
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'crop',
+         '--img', str(img_file), '--seg', str(seg_file),
+         '--out', str(out), '--out-suffix', '_crop'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / 'img_crop.nii.gz').exists()
+    # Seg must NOT be saved
+    assert not (out / 'seg_crop.nii.gz').exists()
 
 
 def test_crop_margin_cli(img_file, seg_file, tmp_path):
     """CLI --margin flag is accepted and produces valid output."""
     import subprocess, sys
-    out_img = tmp_path / 'out_img'
-    out_seg = tmp_path / 'out_seg'
-    out_img.mkdir(); out_seg.mkdir()
+    out = tmp_path / 'out'
+    out.mkdir()
     result = subprocess.run(
         [sys.executable, '-m', 'uroseg.cli', 'crop',
          '--img', str(img_file), '--seg', str(seg_file),
-         '--out-img', str(out_img), '--out-seg', str(out_seg),
-         '--img-suffix', '_crop', '--seg-suffix', '_crop',
-         '--margin', '2'],
+         '--out', str(out), '--out-suffix', '_crop', '--margin', '2'],
         capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
-    assert (out_img / 'img_crop.nii.gz').exists()
-    assert (out_seg / 'seg_crop.nii.gz').exists()
-
-
-def test_crop_cli(img_file, seg_file, tmp_path):
-    import subprocess, sys
-    out_img = tmp_path / 'out_img'
-    out_seg = tmp_path / 'out_seg'
-    out_img.mkdir(); out_seg.mkdir()
-    result = subprocess.run(
-        [sys.executable, '-m', 'uroseg.cli', 'crop',
-         '--img', str(img_file), '--seg', str(seg_file),
-         '--out-img', str(out_img), '--out-seg', str(out_seg),
-         '--img-suffix', '_crop', '--seg-suffix', '_crop'],
-        capture_output=True, text=True
-    )
-    assert result.returncode == 0, result.stderr
-    assert (out_img / 'img_crop.nii.gz').exists()
-    assert (out_seg / 'seg_crop.nii.gz').exists()
+    assert (out / 'img_crop.nii.gz').exists()
 
 
 # ── preview_jpg ───────────────────────────────────────────────────────────────

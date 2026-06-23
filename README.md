@@ -80,7 +80,7 @@ uroseg reorient -i img.nii.gz -o img_ras/
 uroseg largest_component -s seg.nii.gz -o seg_lc/
 
 # Crop image and seg to segmentation bounding box
-uroseg crop -i img.nii.gz -s seg.nii.gz --out-img img_crop/ --out-seg seg_crop/
+uroseg crop -i img.nii.gz -s seg.nii.gz -o img_crop/
 
 # Generate JPG preview (single slice, optional seg overlay)
 uroseg preview -i img.nii.gz -s seg.nii.gz -o previews/ --orient sag --sliceloc 0.5
@@ -106,7 +106,7 @@ uroseg resample             -i/--img PATH  -o/--out PATH  -m/--mm X [Y Z]
 uroseg reorient             -i/--img PATH  -o/--out PATH  [--orientation RAS]
 uroseg largest_component    -s/--seg PATH  -o/--out PATH  [-l/--labels 1 2 3]
 uroseg preview              -i/--img PATH [-s/--seg PATH] -o/--out PATH [-t/--orient sag|ax|cor] [-l/--sliceloc 0.5]
-uroseg crop                 -i/--img PATH  -s/--seg PATH  --out-img PATH  --out-seg PATH  [-m/--margin N]
+uroseg crop                 -i/--img PATH  -s/--seg PATH  -o/--out PATH  [-m/--margin N]
 uroseg transform_seg2image  -s/--seg PATH  -i/--img PATH  --out-seg PATH  [-x/--interpolation nearest|linear|label]
 uroseg cpdir                -i/--img PATH  -o/--out PATH  [--out-suffix SUFFIX] [--out-prefix PREFIX]
 uroseg install              --model NAME [NAME ...] | --all  [--data-dir PATH]
