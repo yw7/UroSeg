@@ -12,19 +12,17 @@ from uroseg.utils.utils import add_common_args, build_pairs
 def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
     input_path, output_path = pair
     img = Image.load(input_path)
-    img = img.reorient(args.orientation)
+    img = img.as_canonical()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_image(img.data, img.affine, img.header, str(output_path))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description='Reorient NIfTI images to a canonical orientation.'
+        description='Reorient NIfTI images to the closest canonical orientation.'
     )
     parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
     parser.add_argument('--out', '-o', required=True, help='Output file or folder')
-    parser.add_argument('--orientation', default='RAS',
-                        help='Target orientation code (default: RAS)')
     parser.add_argument('--out-suffix', default='_reoriented', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
     add_common_args(parser)
