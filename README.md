@@ -33,7 +33,7 @@ pip install uroseg
 Development install:
 
 ```bash
-git clone https://github.com/neuropoly/uroseg
+git clone https://github.com/yw7/uroseg
 cd uroseg
 pip install -e .
 ```
@@ -56,40 +56,40 @@ By default, weights are stored in `~/uroseg/nnUNet/results/`. Override with `--d
 
 ```bash
 # Single image — pass a folder as --out (output named automatically)
-uroseg prostate --img subject01_T2.nii.gz --out segs/
-uroseg bladder  --img subject01_CT.nii.gz  --out segs/
+uroseg prostate -i subject01_T2.nii.gz -o segs/
+uroseg bladder  -i subject01_CT.nii.gz  -o segs/
 
 # Batch (folder input → folder output)
-uroseg prostate --img /data/mri/ --out /data/segs/ --max-workers 4
+uroseg prostate -i /data/mri/ -o /data/segs/ -w 4
 ```
 
 ### Utilities
 
 ```bash
-# Remap label IDs using a JSON map {"src_id": dst_id}
-uroseg map --seg seg.nii.gz --out remapped/ --map labels.json
+# Remap label IDs — JSON file or direct key:value pairs
+uroseg map -s seg.nii.gz -o remapped/ -m labels.json
+uroseg map -s seg.nii.gz -o remapped/ -m 1:2 3:0
 
 # Resample to 1×1×1 mm isotropic
-uroseg resample --img img.nii.gz --out img_1mm/ --spacing 1 1 1
+uroseg resample -i img.nii.gz -o img_1mm/ --mm 1
 
 # Reorient to RAS canonical
-uroseg reorient --img img.nii.gz --out img_ras/
+uroseg reorient -i img.nii.gz -o img_ras/
 
 # Keep only the largest connected component per label
-uroseg largest_component --seg seg.nii.gz --out seg_lc/
+uroseg largest_component -s seg.nii.gz -o seg_lc/
 
 # Crop image and seg to segmentation bounding box
-uroseg crop --img img.nii.gz --seg seg.nii.gz \
-            --out-img img_crop/ --out-seg seg_crop/
+uroseg crop -i img.nii.gz -s seg.nii.gz --out-img img_crop/ --out-seg seg_crop/
 
 # Generate JPG preview (single slice, optional seg overlay)
-uroseg preview --img img.nii.gz --seg seg.nii.gz --out previews/ --orient sag --sliceloc 0.5
+uroseg preview -i img.nii.gz -s seg.nii.gz -o previews/ --orient sag --sliceloc 0.5
 
 # Resample segmentation to match reference image space (nearest-neighbour)
-uroseg transform_seg2image --seg seg.nii.gz --img ref.nii.gz --out-seg seg_transformed/
+uroseg transform_seg2image -s seg.nii.gz -i ref.nii.gz --out-seg seg_transformed/
 
 # Copy NIfTI files with optional renaming
-uroseg cpdir --img /data/mri/ --out /data/mri_copy/ --out-suffix _copy
+uroseg cpdir -i /data/mri/ -o /data/mri_copy/ --out-suffix _copy
 
 # List available organ models
 uroseg list
@@ -97,20 +97,20 @@ uroseg list
 
 ### CLI reference
 
-All commands support `--overwrite`, `--max-workers N`, and `--quiet`.
+All commands support `-r`/`--overwrite`, `-w`/`--max-workers N`, and `-q`/`--quiet`.
 
 ```
-uroseg <organ>              --img PATH --out PATH [--fold N] [--out-suffix SUFFIX]
-uroseg map                  --seg PATH --out PATH --map JSON [--out-suffix SUFFIX]
-uroseg resample             --img PATH --out PATH --spacing X Y Z [--out-suffix SUFFIX]
-uroseg reorient             --img PATH --out PATH [--orientation RAS] [--out-suffix SUFFIX]
-uroseg largest_component    --seg PATH --out PATH [--labels 1 2 3] [--out-suffix SUFFIX]
-uroseg preview              --img PATH [--seg PATH] --out PATH [--orient sag|ax|cor] [--sliceloc 0.5] [--out-suffix SUFFIX]
-uroseg crop                 --img PATH --seg PATH --out-img PATH --out-seg PATH
-uroseg transform_seg2image  --seg PATH --img PATH --out-seg PATH [--seg-suffix SUFFIX]
-uroseg cpdir                --img PATH --out PATH [--out-suffix SUFFIX] [--out-prefix PREFIX]
-uroseg install              --model NAME [NAME ...] | --all [--data-dir PATH]
-uroseg train ORGAN             [--fold N] [--auglab-config JSON] [--gpus N] [--data-dir PATH]
+uroseg <organ>              -i/--img PATH  -o/--out PATH  [-f/--fold N] [-d/--device cuda|cpu|mps]
+uroseg map                  -s/--seg PATH  -o/--out PATH  -m/--map JSON|KEY:VAL ...
+uroseg resample             -i/--img PATH  -o/--out PATH  -m/--mm X [Y Z]
+uroseg reorient             -i/--img PATH  -o/--out PATH  [--orientation RAS]
+uroseg largest_component    -s/--seg PATH  -o/--out PATH  [-l/--labels 1 2 3]
+uroseg preview              -i/--img PATH [-s/--seg PATH] -o/--out PATH [-t/--orient sag|ax|cor] [-l/--sliceloc 0.5]
+uroseg crop                 -i/--img PATH  -s/--seg PATH  --out-img PATH  --out-seg PATH  [-m/--margin N]
+uroseg transform_seg2image  -s/--seg PATH  -i/--img PATH  --out-seg PATH  [-x/--interpolation nearest|linear|label]
+uroseg cpdir                -i/--img PATH  -o/--out PATH  [--out-suffix SUFFIX] [--out-prefix PREFIX]
+uroseg install              --model NAME [NAME ...] | --all  [--data-dir PATH]
+uroseg train ORGAN          [-f/--fold N]  [--auglab-config JSON]  [--gpus N]  [--data-dir PATH]
 uroseg list
 ```
 
@@ -120,18 +120,18 @@ uroseg list
 
 ### 1. Create the model JSON
 
-Add `uroseg/resources/models/<organ>.json`. Minimal example (CT, single label):
+Add `uroseg/resources/models/<organ>.json`. Minimal example (single label):
 
 ```json
 {
   "name": "kidney",
   "description": "Kidney (CT)",
   "nnunet_task": "Dataset020_Kidney",
-  "channel_names": {"0": "CT"},
   "labels": {
-    "0": "background",
-    "1": "kidney"
-  }
+    "background": 0,
+    "kidney": 1
+  },
+  "weights_url": "https://github.com/yw7/uroseg/releases/download/r.../Dataset020_Kidney_r....zip"
 }
 ```
 
@@ -140,21 +140,19 @@ Region-based model with hierarchical sub-labels (single model, sigmoid per regio
 ```json
 {
   "name": "prostate",
-  "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3), anterior fibromuscular stroma (4)",
+  "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3)",
   "nnunet_task": "Dataset001_Prostate",
-  "channel_names": {"0": "MRI-T2"},
   "labels": {
-    "0": "background",
-    "1": "prostate",
-    "2": "prostate_pz",
-    "3": "prostate_cz",
-    "4": "prostate_afs"
+    "background": 0,
+    "prostate": [1, 2, 3],
+    "prostate_tz": 2,
+    "prostate_pz": 3
   },
-  "regions_class_order": [1, 2, 3, 4]
+  "weights_url": "https://github.com/yw7/uroseg/releases/download/r.../Dataset001_Prostate_r....zip"
 }
 ```
 
-`regions_class_order` enables nnU-Net's region-based training: label 1 in ground truth is the union of labels 2, 3, and 4 (the prostate zones together make up the whole prostate). `channel_names` maps channel index → modality name; use `"CT"` for CT-specific normalization; any other string uses per-case z-score normalization.
+Label values can be an `int` (single label) or a `list[int]` (region = union of sub-labels). When any label is a list, `uroseg train` automatically sets `regions_class_order` in the generated `dataset.json` to enable nnU-Net's region-based training. `channel_names` is always set to `{"0": "MRI"}` — no need to specify it in the model JSON.
 
 ### 2. Place training data
 
