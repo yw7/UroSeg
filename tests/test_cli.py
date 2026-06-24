@@ -54,6 +54,9 @@ def test_list_redirects_to_help():
     list_result = run_uroseg('list')
     assert list_result.returncode == 0
     assert list_result.stdout == help_result.stdout
+    # no-args and -h/-help must also produce identical output
+    assert run_uroseg().stdout == help_result.stdout
+    assert run_uroseg('-h').stdout == help_result.stdout
 
 
 def test_unknown_flag_exits_nonzero():

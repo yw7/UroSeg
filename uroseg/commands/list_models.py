@@ -13,6 +13,7 @@ _COMMANDS = {
     'install':             'Download model weights',
     'train nnunet':        'Train with nnU-Net + AugLab',
 }
+# predict_nnunet is intentionally unlisted — low-level internal command
 
 
 def show_help() -> None:

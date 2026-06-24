@@ -13,6 +13,7 @@ def main() -> None:
     if cmd == 'list':
         from uroseg.commands.list_models import show_help
         show_help()
+        return
     elif cmd == 'install':
         sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.commands.install import main as run
