@@ -76,3 +76,21 @@ def test_list_cli():
     assert result.returncode == 0, result.stderr
     assert 'prostate' in result.stdout
     assert 'bladder' in result.stdout
+
+
+def test_train_no_engine_exits_nonzero():
+    result = run_uroseg('train')
+    assert result.returncode != 0
+    assert 'Engines:' in result.stderr  # new train.py prints _HELP to stderr
+
+
+def test_train_unknown_engine_exits_nonzero():
+    result = run_uroseg('train', 'foo', 'kidney')
+    assert result.returncode != 0
+    assert 'Unknown engine' in result.stderr
+
+
+def test_train_help_exits_zero():
+    result = run_uroseg('train', '-h')
+    assert result.returncode == 0
+    assert 'Engines:' in result.stdout  # new train.py prints _HELP; old argparse doesn't print 'Engines:'
