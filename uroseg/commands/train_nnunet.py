@@ -18,8 +18,8 @@ def extract_dataset_id(nnunet_task: str) -> int:
     return int(match.group(1))
 
 
-def generate_dataset_json(model: dict, images_tr_dir: Path) -> dict:
-    labels = normalize_labels(model["labels"])
+def generate_dataset_json(model, images_tr_dir: Path) -> dict:
+    labels = normalize_labels(model.labels)
 
     all_values: set[int] = set()
     has_regions = False
@@ -54,7 +54,7 @@ def main() -> None:
         description="Train a UroSeg model with nnU-Net and AugLab augmentation.",
     )
     parser.add_argument("organ",
-                        help="Organ name matching resources/models/<organ>.json")
+                        help="Organ name matching resources/models/<organ>.py")
     parser.add_argument("--fold", "-f", type=int, default=0,
                         help="nnU-Net fold number (0–4, default: 0)")
     parser.add_argument("--auglab-config", default=None,
@@ -65,11 +65,11 @@ def main() -> None:
                         help="Override UROSEG_DATA / ~/uroseg/ with this path")
     args = parser.parse_args()
 
-    model = _utils.get_model(args.organ)
+    mod = _utils.load_model_module(args.organ)
     data_path = _utils.resolve_data_path(args.data_dir)
     setup_nnunet_env(data_path)
 
-    nnunet_task = model["nnunet_task"]
+    nnunet_task = mod.NNUNET_TASK
     dataset_id = extract_dataset_id(nnunet_task)
 
     raw_dir = data_path / "nnUNet" / "raw" / nnunet_task
@@ -83,7 +83,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    dataset_json = generate_dataset_json(model, images_tr)
+    dataset_json = generate_dataset_json(mod.MODEL, images_tr)
     dataset_json_path = raw_dir / "dataset.json"
     dataset_json_path.write_text(json.dumps(dataset_json, indent=2))
     print(f"Generated {dataset_json_path}")

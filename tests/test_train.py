@@ -18,28 +18,30 @@ def _stub_nnunetv2(monkeypatch):
 
 @pytest.fixture
 def prostate_model():
-    return {
-        "name": "prostate",
-        "description": "Prostate MRI-T2",
-        "nnunet_task": "Dataset001_Prostate",
-        "labels": {
+    from uroseg.models import ModelDef
+    return ModelDef(
+        name="prostate",
+        description="Prostate MRI-T2",
+        weights_url="https://example.com/prostate.zip",
+        labels={
             "background": 0,
             "prostate": [1, 2, 3, 4],
             "prostate_pz": 2,
             "prostate_cz": 3,
             "prostate_afs": 4,
         },
-    }
+    )
 
 
 @pytest.fixture
 def bladder_model():
-    return {
-        "name": "bladder",
-        "description": "Urinary bladder (CT)",
-        "nnunet_task": "Dataset010_Bladder",
-        "labels": {"background": 0, "bladder": 1},
-    }
+    from uroseg.models import ModelDef
+    return ModelDef(
+        name="bladder",
+        description="Urinary bladder (CT)",
+        weights_url="https://example.com/bladder.zip",
+        labels={"background": 0, "bladder": 1},
+    )
 
 
 @pytest.fixture
@@ -140,6 +142,7 @@ def test_setup_nnunet_env_sets_vars(tmp_path):
 
 def test_train_generates_dataset_json(tmp_path):
     from uroseg.commands.train_nnunet import main
+    from uroseg.models import ModelDef
 
     # Scaffold the raw data directory
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset001_Prostate"
@@ -153,15 +156,21 @@ def test_train_generates_dataset_json(tmp_path):
     preprocessed_dir = tmp_path / "nnUNet" / "preprocessed" / "Dataset001_Prostate"
     preprocessed_dir.mkdir(parents=True)
 
+    # Create a mock module
+    mock_module = MagicMock()
+    mock_module.NNUNET_TASK = "Dataset001_Prostate"
+    mock_module.MODEL = ModelDef(
+        name="prostate",
+        description="Prostate MRI-T2",
+        weights_url="https://example.com/prostate.zip",
+        labels={"background": 0, "prostate": [1], "prostate_sub": 1},
+    )
+
     with patch("auglab.add_trainer.add_trainer"), \
          patch("uroseg.commands.train_nnunet.subprocess.run") as mock_run, \
-         patch("uroseg.utils.utils.get_model") as mock_get_model:
+         patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
-        mock_get_model.return_value = {
-            "name": "prostate",
-            "nnunet_task": "Dataset001_Prostate",
-            "labels": {"background": 0, "prostate": [1], "prostate_sub": 1},
-        }
+        mock_load_module.return_value = mock_module
         mock_run.return_value = None
 
         import sys
@@ -182,6 +191,7 @@ def test_train_generates_dataset_json(tmp_path):
 
 def test_train_calls_nnunet_train(tmp_path):
     from uroseg.commands.train_nnunet import main
+    from uroseg.models import ModelDef
 
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset010_Bladder"
     images_tr = raw_dir / "imagesTr"
@@ -193,15 +203,21 @@ def test_train_calls_nnunet_train(tmp_path):
     preprocessed_dir = tmp_path / "nnUNet" / "preprocessed" / "Dataset010_Bladder"
     preprocessed_dir.mkdir(parents=True)
 
+    # Create a mock module
+    mock_module = MagicMock()
+    mock_module.NNUNET_TASK = "Dataset010_Bladder"
+    mock_module.MODEL = ModelDef(
+        name="bladder",
+        description="Urinary bladder (CT)",
+        weights_url="https://example.com/bladder.zip",
+        labels={"background": 0, "bladder": 1},
+    )
+
     with patch("auglab.add_trainer.add_trainer"), \
          patch("uroseg.commands.train_nnunet.subprocess.run") as mock_run, \
-         patch("uroseg.utils.utils.get_model") as mock_get_model:
+         patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
-        mock_get_model.return_value = {
-            "name": "bladder",
-            "nnunet_task": "Dataset010_Bladder",
-            "labels": {"background": 0, "bladder": 1},
-        }
+        mock_load_module.return_value = mock_module
         mock_run.return_value = None
 
         import sys
@@ -224,6 +240,7 @@ def test_train_calls_nnunet_train(tmp_path):
 
 def test_train_skips_preprocess_if_done(tmp_path):
     from uroseg.commands.train_nnunet import main
+    from uroseg.models import ModelDef
 
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset010_Bladder"
     images_tr = raw_dir / "imagesTr"
@@ -235,15 +252,21 @@ def test_train_skips_preprocess_if_done(tmp_path):
     # Already preprocessed
     (tmp_path / "nnUNet" / "preprocessed" / "Dataset010_Bladder").mkdir(parents=True)
 
+    # Create a mock module
+    mock_module = MagicMock()
+    mock_module.NNUNET_TASK = "Dataset010_Bladder"
+    mock_module.MODEL = ModelDef(
+        name="bladder",
+        description="Urinary bladder (CT)",
+        weights_url="https://example.com/bladder.zip",
+        labels={"background": 0, "bladder": 1},
+    )
+
     with patch("auglab.add_trainer.add_trainer"), \
          patch("uroseg.commands.train_nnunet.subprocess.run") as mock_run, \
-         patch("uroseg.utils.utils.get_model") as mock_get_model:
+         patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
-        mock_get_model.return_value = {
-            "name": "bladder",
-            "nnunet_task": "Dataset010_Bladder",
-            "labels": {"background": 0, "bladder": 1},
-        }
+        mock_load_module.return_value = mock_module
         mock_run.return_value = None
 
         import sys
@@ -260,6 +283,7 @@ def test_train_skips_preprocess_if_done(tmp_path):
 
 def test_train_sets_auglab_config_env(tmp_path):
     from uroseg.commands.train_nnunet import main
+    from uroseg.models import ModelDef
 
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset010_Bladder"
     images_tr = raw_dir / "imagesTr"
@@ -279,15 +303,21 @@ def test_train_sets_auglab_config_env(tmp_path):
         if cmd[0] == "nnUNetv2_train":
             captured_env["AUGLAB_CONFIG"] = os.environ.get("AUGLAB_CONFIG")
 
+    # Create a mock module
+    mock_module = MagicMock()
+    mock_module.NNUNET_TASK = "Dataset010_Bladder"
+    mock_module.MODEL = ModelDef(
+        name="bladder",
+        description="Urinary bladder (CT)",
+        weights_url="https://example.com/bladder.zip",
+        labels={"background": 0, "bladder": 1},
+    )
+
     with patch("auglab.add_trainer.add_trainer"), \
          patch("uroseg.commands.train_nnunet.subprocess.run", side_effect=capture_run), \
-         patch("uroseg.utils.utils.get_model") as mock_get_model:
+         patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
-        mock_get_model.return_value = {
-            "name": "bladder",
-            "nnunet_task": "Dataset010_Bladder",
-            "labels": {"background": 0, "bladder": 1},
-        }
+        mock_load_module.return_value = mock_module
 
         import sys
         with patch.object(sys, "argv", [
@@ -302,13 +332,20 @@ def test_train_sets_auglab_config_env(tmp_path):
 
 def test_train_fails_when_no_images_tr(tmp_path):
     from uroseg.commands.train_nnunet import main
+    from uroseg.models import ModelDef
 
-    with patch("uroseg.utils.utils.get_model") as mock_get_model:
-        mock_get_model.return_value = {
-            "name": "bladder",
-            "nnunet_task": "Dataset010_Bladder",
-            "labels": {"background": 0, "bladder": 1},
-        }
+    # Create a mock module
+    mock_module = MagicMock()
+    mock_module.NNUNET_TASK = "Dataset010_Bladder"
+    mock_module.MODEL = ModelDef(
+        name="bladder",
+        description="Urinary bladder (CT)",
+        weights_url="https://example.com/bladder.zip",
+        labels={"background": 0, "bladder": 1},
+    )
+
+    with patch("uroseg.utils.utils.load_model_module") as mock_load_module:
+        mock_load_module.return_value = mock_module
 
         import sys
         with patch.object(sys, "argv", [
