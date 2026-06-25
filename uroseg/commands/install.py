@@ -1,14 +1,10 @@
 from __future__ import annotations
 import argparse
-import shutil
 import sys
-import zipfile
-import urllib.request
 from pathlib import Path
 
-from tqdm import tqdm
-
-from uroseg.utils.utils import resolve_data_path, get_model, get_all_models
+from uroseg.utils.utils import resolve_data_path, load_model_module, get_all_models
+from uroseg.utils.inference_utils import download_weights
 
 
 def extract_release_id(url: str) -> str:
@@ -24,52 +20,19 @@ def is_installed(nnunet_task: str, url: str, data_path: Path) -> bool:
     return get_install_dir(nnunet_task, url, data_path).exists()
 
 
-def download_and_extract(model: dict, data_path: Path, store_export: bool = False) -> None:
-    url = model.get('weights_url')
+def download_and_extract(model, nnunet_task: str, data_path: Path) -> None:
+    url = model.weights_url
     if not url:
-        print(f"  {model['name']}: no weights_url — skipping.")
+        print(f"  {model.name}: no weights_url — skipping.")
         return
-
-    nnunet_task = model['nnunet_task']
-
     if is_installed(nnunet_task, url, data_path):
-        print(f"  {model['name']}: already installed.")
+        print(f"  {model.name}: already installed.")
         return
-
     release_id = extract_release_id(url)
-    exports_dir = data_path / 'nnUNet' / 'exports'
     results_dir = data_path / 'nnUNet' / 'results' / release_id
-    exports_dir.mkdir(parents=True, exist_ok=True)
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    zip_name = url.split('/')[-1]
-    zip_path = exports_dir / zip_name
-
-    try:
-        print(f"  Downloading {model['name']} ({zip_name})...")
-        with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
-            def reporthook(count, block_size, total_size):
-                if total_size > 0:
-                    bar.total = total_size
-                bar.update(block_size)
-            urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
-
-        print(f"  Extracting to {results_dir}...")
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(results_dir)
-    except Exception:
-        if zip_path.exists():
-            zip_path.unlink(missing_ok=True)
-        task_dir = results_dir / nnunet_task
-        if task_dir.exists():
-            shutil.rmtree(task_dir)
-        raise
-
-    if not store_export:
-        zip_path.unlink()
-        print(f"  Done. Weights installed at {results_dir / nnunet_task}")
-    else:
-        print(f"  Done. Archive kept at {zip_path}")
+    print(f"  Downloading {model.name}...")
+    download_weights(url, results_dir)
+    print(f"  Done. Weights installed at {results_dir / nnunet_task}")
 
 
 def main() -> None:
@@ -79,17 +42,16 @@ def main() -> None:
                        help='One or more organ model names (e.g. prostate bladder)')
     group.add_argument('--all', action='store_true', help='Install all available models')
     parser.add_argument('--data-dir', default=None, help='Override data path')
-    parser.add_argument('--store-export', action='store_true',
-                        help='Keep downloaded zip archive after extraction')
     args = parser.parse_args()
 
     data_path = resolve_data_path(args.data_dir)
 
     if args.all:
-        models = list(get_all_models().values())
+        names = list(get_all_models().keys())
     else:
-        models = [get_model(name) for name in args.model]
+        names = args.model
 
-    print(f"Installing {len(models)} model(s) to {data_path}...")
-    for model in models:
-        download_and_extract(model, data_path, store_export=args.store_export)
+    print(f"Installing {len(names)} model(s) to {data_path}...")
+    for name in names:
+        mod = load_model_module(name)
+        download_and_extract(mod.MODEL, mod.NNUNET_TASK, data_path)
