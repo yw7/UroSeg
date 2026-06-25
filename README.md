@@ -118,41 +118,57 @@ uroseg list
 
 ## Training
 
-### 1. Create the model JSON
+### 1. Create the model Python file
 
-Add `uroseg/resources/models/<organ>.json`. Minimal example (single label):
+Add `uroseg/resources/models/<organ>.py`:
 
-```json
-{
-  "name": "kidney",
-  "description": "Kidney (CT)",
-  "nnunet_task": "Dataset020_Kidney",
-  "labels": {
-    "background": 0,
-    "kidney": 1
-  },
-  "weights_url": "https://github.com/yw7/uroseg/releases/download/r.../Dataset020_Kidney_r....zip"
-}
+```python
+import argparse
+from uroseg.models import ModelDef
+from uroseg.utils.inference_utils import add_common_inference_args, run_nnunet_predict
+
+MODEL = ModelDef(
+    name="kidney",
+    description="Kidney (CT)",
+    weights_url="https://github.com/yw7/uroseg/releases/download/r.../Dataset020_Kidney_r....zip",
+    labels={"background": 0, "kidney": 1},
+)
+
+NNUNET_TASK = "Dataset020_Kidney"
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='uroseg kidney')
+    add_common_inference_args(parser)
+    args = parser.parse_args()
+    run_nnunet_predict(NNUNET_TASK, args)
 ```
 
-Region-based model with hierarchical sub-labels (single model, sigmoid per region):
+Region-based model (sigmoid per region):
 
-```json
-{
-  "name": "prostate",
-  "description": "Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3)",
-  "nnunet_task": "Dataset001_Prostate",
-  "labels": {
-    "background": 0,
-    "prostate": [1, 2, 3],
-    "prostate_tz": 2,
-    "prostate_pz": 3
-  },
-  "weights_url": "https://github.com/yw7/uroseg/releases/download/r.../Dataset001_Prostate_r....zip"
-}
+```python
+import argparse
+from uroseg.models import ModelDef
+from uroseg.utils.inference_utils import add_common_inference_args, run_nnunet_predict
+
+MODEL = ModelDef(
+    name="prostate",
+    description="Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3)",
+    weights_url="https://github.com/yw7/uroseg/releases/download/r.../Dataset001_Prostate_r....zip",
+    labels={"background": 0, "prostate": [1, 2, 3], "prostate_tz": 2, "prostate_pz": 3},
+)
+
+NNUNET_TASK = "Dataset001_Prostate"
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='uroseg prostate')
+    add_common_inference_args(parser)
+    args = parser.parse_args()
+    run_nnunet_predict(NNUNET_TASK, args)
 ```
 
-Label values can be an `int` (single label) or a `list[int]` (region = union of sub-labels). When any label is a list, `uroseg train nnunet` automatically sets `regions_class_order` in the generated `dataset.json` to enable nnU-Net's region-based training. `channel_names` is always set to `{"0": "MRI"}` — no need to specify it in the model JSON.
+`labels` values can be an `int` (single label) or a `list[int]` (region = union of sub-labels). When any label is a list, `uroseg train nnunet` automatically sets `regions_class_order` for nnU-Net region-based training. To add model-specific CLI flags, add `parser.add_argument(...)` calls before `parse_args()` and use them in your own inference logic instead of calling `run_nnunet_predict`.
 
 ### 2. Place training data
 
@@ -226,7 +242,7 @@ All UroSeg data lives under a single configurable root:
 
 ## Contributing — Adding a New Organ Model
 
-1. Create `uroseg/resources/models/<organ>.json` with the fields above
+1. Create `uroseg/resources/models/<organ>.py` per the Python format above
 2. Place training data in `~/uroseg/nnUNet/raw/<nnunet_task>/imagesTr/` and `labelsTr/`
 3. Train: `uroseg train nnunet <organ>`
 4. Archive the trained model: `Dataset###_<Name>_r<YYYYMMDD>.zip`
