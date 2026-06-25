@@ -23,7 +23,7 @@ def show_help() -> None:
     if models:
         name_w = max(len(n) for n in models) + 2
         for name, info in sorted(models.items()):
-            lines.append(f'  {name:<{name_w}}{info.get("description", "")}')
+            lines.append(f'  {name:<{name_w}}{info.description}')
     else:
         lines.append('  (no models installed)')
     lines.append('')

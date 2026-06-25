@@ -1,6 +1,5 @@
 from __future__ import annotations
 import argparse
-import json
 import os
 from pathlib import Path
 from importlib.resources import files
@@ -58,24 +57,39 @@ def resolve_data_path(data_dir: str | None = None) -> Path:
     return Path.home() / 'uroseg'
 
 
-def get_model(name: str) -> dict:
-    path = files('uroseg.resources.models').joinpath(f'{name}.json')
+def load_model_module(name: str):
+    from importlib import import_module
     try:
-        return json.loads(path.read_text())
-    except (FileNotFoundError, KeyError, OSError):
-        available = ', '.join(sorted(
-            p.name.removesuffix('.json')
+        return import_module(f'uroseg.resources.models.{name}')
+    except ModuleNotFoundError:
+        available = sorted(
+            p.name[:-3]
             for p in files('uroseg.resources.models').iterdir()
-            if p.name.endswith('.json')
-        ))
+            if p.name.endswith('.py') and p.name != '__init__.py'
+        )
         raise ValueError(
-            f"Unknown model '{name}'. Available: {available}\n"
+            f"Unknown model: {name!r}. Available: {available}\n"
             f"Run 'uroseg list' to see all models."
         )
 
 
+def get_model(name: str):
+    from uroseg.models import ModelDef
+    return load_model_module(name).MODEL
+
+
+def get_all_models() -> dict:
+    from importlib import import_module
+    result = {}
+    for p in files('uroseg.resources.models').iterdir():
+        if p.name.endswith('.py') and p.name != '__init__.py':
+            stem = p.name[:-3]
+            result[stem] = import_module(f'uroseg.resources.models.{stem}').MODEL
+    return result
+
+
 def normalize_labels(raw: dict) -> dict:
-    """Normalize model JSON label dicts to ``{name: int | list[int]}``.
+    """Normalize label dicts to ``{name: int | list[int]}``.
 
     Accepts four input formats:
     - TotalSpineSeg style (name→value): ``{"background": 0, "disc": [1,2,3]}``
@@ -86,10 +100,8 @@ def normalize_labels(raw: dict) -> dict:
     result: dict = {}
     for k, v in raw.items():
         if isinstance(v, (int, list)):
-            # TotalSpineSeg format — key is the label name
             result[str(k)] = v
         elif isinstance(v, str):
-            # Old/compact format — key encodes label value(s), value is the name
             name = v
             k_str = str(k)
             if ',' in k_str:
@@ -102,12 +114,3 @@ def normalize_labels(raw: dict) -> dict:
             else:
                 result[name] = int(k_str)
     return result
-
-
-def get_all_models() -> dict[str, dict]:
-    models_dir = files('uroseg.resources.models')
-    return {
-        p.name.removesuffix('.json'): json.loads(p.read_text())
-        for p in models_dir.iterdir()
-        if p.name.endswith('.json')
-    }

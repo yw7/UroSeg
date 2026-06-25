@@ -82,30 +82,46 @@ def test_resolve_data_path_arg(tmp_path):
     assert path == tmp_path
 
 
-def test_get_model_prostate():
+def test_load_model_module_prostate():
+    from uroseg.utils.utils import load_model_module
+    mod = load_model_module('prostate')
+    assert hasattr(mod, 'MODEL')
+    assert hasattr(mod, 'NNUNET_TASK')
+    assert callable(mod.inference)
+
+
+def test_load_model_module_unknown_raises_value_error():
+    from uroseg.utils.utils import load_model_module
+    with pytest.raises(ValueError, match='Unknown model'):
+        load_model_module('nonexistent_model_xyz')
+
+
+def test_get_model_returns_modeldef():
+    from uroseg.models import ModelDef
     model = get_model('prostate')
-    assert model['name'] == 'prostate'
-    assert 'labels' in model
-    assert 'nnunet_task' in model
-    assert 'channel_names' not in model       # removed from model JSON
-    assert 'background' in model['labels']    # new canonical format
-    assert isinstance(model['labels']['prostate'], list)  # region
+    assert isinstance(model, ModelDef)
+    assert model.name == 'prostate'
+    assert 'labels' in vars(model) or hasattr(model, 'labels')
+    assert 'background' in model.labels
+    assert isinstance(model.labels['prostate'], list)
 
 
-def test_get_model_bladder():
+def test_get_model_bladder_returns_modeldef():
+    from uroseg.models import ModelDef
     model = get_model('bladder')
-    assert model['name'] == 'bladder'
-    assert 'bladder' in model['labels']       # new canonical format
-    assert 'channel_names' not in model
+    assert isinstance(model, ModelDef)
+    assert model.name == 'bladder'
+    assert 'bladder' in model.labels
 
 
-def test_get_model_unknown():
+def test_get_model_unknown_raises():
     with pytest.raises(Exception):
         get_model('nonexistent_organ')
 
 
-def test_get_all_models():
+def test_get_all_models_returns_modeldef_dict():
+    from uroseg.models import ModelDef
     models = get_all_models()
     assert 'prostate' in models
     assert 'bladder' in models
-    assert all('labels' in m for m in models.values())
+    assert all(isinstance(m, ModelDef) for m in models.values())

@@ -25,7 +25,4 @@ uroseg = "uroseg.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 
-[tool.setuptools.package-data]
-"uroseg.resources.models" = ["*.json"]
-
 [tool.setuptools_scm]

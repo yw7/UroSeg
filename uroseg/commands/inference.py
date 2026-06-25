@@ -11,6 +11,7 @@ from uroseg.utils.utils import (
     build_output_path,
     resolve_data_path,
     get_all_models,
+    load_model_module,
 )
 from uroseg.commands.predict_nnunet import find_model_dir, predict
 
@@ -31,7 +32,7 @@ def build_inference_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def resolve_organ(organ: str) -> dict:
+def resolve_organ(organ: str):
     available = get_all_models()
     if organ not in available:
         print(
@@ -56,7 +57,7 @@ def main() -> None:
 
     model = resolve_organ(args.organ)
     data_path = resolve_data_path(args.data_dir)
-    model_dir = find_model_dir(model['nnunet_task'], data_path)
+    model_dir = find_model_dir(load_model_module(args.organ).NNUNET_TASK, data_path)
 
     inputs = collect_niftis(args.img)
     if not inputs:

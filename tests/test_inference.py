@@ -24,7 +24,7 @@ def test_build_inference_parser_defaults():
 
 def test_resolve_organ_valid():
     model = resolve_organ('prostate')
-    assert model['name'] == 'prostate'
+    assert model.name == 'prostate'
 
 
 def test_resolve_organ_invalid():
