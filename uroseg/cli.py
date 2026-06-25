@@ -66,17 +66,18 @@ def main() -> None:
 
 
 def _dispatch_model(model: str) -> None:
-    from uroseg.utils.utils import get_all_models
-    available = get_all_models()
-    if model not in available:
+    from uroseg.utils.utils import load_model_module
+    try:
+        mod = load_model_module(model)
+    except ValueError:
         print(
             f"Unknown model or subcommand: '{model}'\n"
             f"Run 'uroseg --help' to see available models and commands.",
             file=sys.stderr,
         )
         sys.exit(1)
-    from uroseg.commands.inference import main as run
-    run()
+    sys.argv = sys.argv[:1] + sys.argv[2:]
+    mod.main()
 
 
 if __name__ == '__main__':

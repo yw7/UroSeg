@@ -1,4 +1,6 @@
+import argparse
 from uroseg.models import ModelDef
+from uroseg.utils.inference_utils import add_common_inference_args, run_nnunet_predict
 
 MODEL = ModelDef(
     name="bladder",
@@ -10,5 +12,8 @@ MODEL = ModelDef(
 NNUNET_TASK = "Dataset010_Bladder"
 
 
-def inference(img, predict):
-    return predict(img)
+def main():
+    parser = argparse.ArgumentParser(prog='uroseg bladder')
+    add_common_inference_args(parser)
+    args = parser.parse_args()
+    run_nnunet_predict(NNUNET_TASK, args)

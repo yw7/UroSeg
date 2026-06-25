@@ -87,7 +87,7 @@ def test_load_model_module_prostate():
     mod = load_model_module('prostate')
     assert hasattr(mod, 'MODEL')
     assert hasattr(mod, 'NNUNET_TASK')
-    assert callable(mod.inference)
+    assert callable(mod.main)
 
 
 def test_load_model_module_unknown_raises_value_error():

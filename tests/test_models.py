@@ -21,14 +21,14 @@ def test_prostate_model_attributes():
     assert isinstance(prostate_mod.MODEL, ModelDef)
     assert prostate_mod.MODEL.name == 'prostate'
     assert isinstance(prostate_mod.NNUNET_TASK, str)
-    assert callable(prostate_mod.inference)
+    assert callable(prostate_mod.main)
 
 
 def test_bladder_model_attributes():
     assert isinstance(bladder_mod.MODEL, ModelDef)
     assert bladder_mod.MODEL.name == 'bladder'
     assert isinstance(bladder_mod.NNUNET_TASK, str)
-    assert callable(bladder_mod.inference)
+    assert callable(bladder_mod.main)
 
 
 def test_prostate_labels_have_background():
@@ -41,9 +41,5 @@ def test_bladder_labels_have_background():
     assert isinstance(bladder_mod.MODEL.labels['bladder'], int)
 
 
-def test_inference_passthrough():
-    sentinel = object()
-    def predict(img):
-        return sentinel
-    result = prostate_mod.inference(object(), predict)
-    assert result is sentinel
+def test_prostate_main_is_callable():
+    assert callable(prostate_mod.main)

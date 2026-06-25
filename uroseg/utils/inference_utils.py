@@ -2,24 +2,18 @@ from __future__ import annotations
 import argparse
 import sys
 import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path
 
+from tqdm import tqdm
+
 from uroseg.utils.image import Image
-from uroseg.utils.utils import (
-    add_common_args,
-    collect_niftis,
-    build_output_path,
-    resolve_data_path,
-    load_model_module,
-)
+from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path, resolve_data_path
 from uroseg.commands.predict_nnunet import find_model_dir, predict
 
 
-def build_inference_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description='Run segmentation inference for a given organ model.'
-    )
-    parser.add_argument('organ', help='Organ model name (e.g. prostate, bladder)')
+def add_common_inference_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
     parser.add_argument('--out', '-o', required=True, help='Output folder')
     parser.add_argument('--fold', '-f', type=int, default=0, help='nnU-Net fold (default: 0)')
@@ -28,24 +22,11 @@ def build_inference_parser() -> argparse.ArgumentParser:
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
     parser.add_argument('--data-dir', default=None, help='Override data path (or set UROSEG_DATA)')
     add_common_args(parser)
-    return parser
 
 
-def _reorient_to_tmp(input_path: Path, tmp_dir: Path, index: int) -> Path:
-    img = Image.load(input_path)
-    img = img.reorient('RAS')
-    out = tmp_dir / f"{index:04d}_{input_path.name}"
-    img.save(out)
-    return out
-
-
-def main() -> None:
-    parser = build_inference_parser()
-    args = parser.parse_args()
-
-    mod = load_model_module(args.organ)
+def run_nnunet_predict(nnunet_task: str, args) -> None:
     data_path = resolve_data_path(args.data_dir)
-    model_dir = find_model_dir(mod.NNUNET_TASK, data_path)
+    model_dir = find_model_dir(nnunet_task, data_path)
 
     inputs = collect_niftis(args.img)
     if not inputs:
@@ -63,7 +44,13 @@ def main() -> None:
 
         if not args.quiet:
             print(f"Reorienting {len(inputs)} image(s) to RAS...")
-        reoriented = [_reorient_to_tmp(p, tmp_in, i) for i, p in enumerate(inputs)]
+        reoriented = []
+        for i, p in enumerate(inputs):
+            img = Image.load(p)
+            img = img.reorient('RAS')
+            out_p = tmp_in / f"{i:04d}_{p.name}"
+            img.save(out_p)
+            reoriented.append(out_p)
 
         predict(
             model_dir=model_dir,
@@ -82,3 +69,19 @@ def main() -> None:
 
     if not args.quiet:
         print(f"Segmentations saved to {out_dir}")
+
+
+def download_weights(url: str, destination: Path) -> None:
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=True)
+    zip_name = url.split('/')[-1]
+    with tempfile.TemporaryDirectory() as tmp:
+        zip_path = Path(tmp) / zip_name
+        with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
+            def reporthook(count, block_size, total_size):
+                if total_size > 0:
+                    bar.total = total_size
+                bar.update(block_size)
+            urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(destination)
