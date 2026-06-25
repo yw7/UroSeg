@@ -246,5 +246,5 @@ All UroSeg data lives under a single configurable root:
 2. Place training data in `~/uroseg/nnUNet/raw/<nnunet_task>/imagesTr/` and `labelsTr/`
 3. Train: `uroseg train nnunet <organ>`
 4. Archive the trained model: `Dataset###_<Name>_r<YYYYMMDD>.zip`
-5. Upload as a GitHub Release asset and set `weights_url` in the model JSON
+5. Upload as a GitHub Release asset and set `weights_url` in the model Python file
 6. Open a pull request

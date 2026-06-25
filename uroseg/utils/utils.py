@@ -59,22 +59,20 @@ def resolve_data_path(data_dir: str | None = None) -> Path:
 
 def load_model_module(name: str):
     from importlib import import_module
-    try:
-        return import_module(f'uroseg.resources.models.{name}')
-    except ModuleNotFoundError:
-        available = sorted(
-            p.name[:-3]
-            for p in files('uroseg.resources.models').iterdir()
-            if p.name.endswith('.py') and p.name != '__init__.py'
-        )
+    available = sorted(
+        p.name[:-3]
+        for p in files('uroseg.resources.models').iterdir()
+        if p.name.endswith('.py') and p.name != '__init__.py'
+    )
+    if name not in available:
         raise ValueError(
             f"Unknown model: {name!r}. Available: {available}\n"
             f"Run 'uroseg list' to see all models."
         )
+    return import_module(f'uroseg.resources.models.{name}')
 
 
 def get_model(name: str):
-    from uroseg.models import ModelDef
     return load_model_module(name).MODEL
 
 

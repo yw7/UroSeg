@@ -72,11 +72,14 @@ def run_nnunet_predict(nnunet_task: str, args) -> None:
 
 
 def download_weights(url: str, destination: Path) -> None:
+    import shutil
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
     zip_name = url.split('/')[-1]
     with tempfile.TemporaryDirectory() as tmp:
         zip_path = Path(tmp) / zip_name
+        extract_tmp = Path(tmp) / 'extract'
+        extract_tmp.mkdir()
         with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
             def reporthook(count, block_size, total_size):
                 if total_size > 0:
@@ -84,4 +87,9 @@ def download_weights(url: str, destination: Path) -> None:
                 bar.update(block_size)
             urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(destination)
+            zf.extractall(extract_tmp)
+        for item in extract_tmp.iterdir():
+            target = destination / item.name
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.move(str(item), str(target))
