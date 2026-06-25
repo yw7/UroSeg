@@ -10,7 +10,6 @@ from uroseg.utils.utils import (
     collect_niftis,
     build_output_path,
     resolve_data_path,
-    get_all_models,
     load_model_module,
 )
 from uroseg.commands.predict_nnunet import find_model_dir, predict
@@ -32,17 +31,6 @@ def build_inference_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def resolve_organ(organ: str):
-    available = get_all_models()
-    if organ not in available:
-        print(
-            f"Unknown organ: '{organ}'\nAvailable: {', '.join(sorted(available))}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return available[organ]
-
-
 def _reorient_to_tmp(input_path: Path, tmp_dir: Path, index: int) -> Path:
     img = Image.load(input_path)
     img = img.reorient('RAS')
@@ -55,9 +43,9 @@ def main() -> None:
     parser = build_inference_parser()
     args = parser.parse_args()
 
-    model = resolve_organ(args.organ)
+    mod = load_model_module(args.organ)
     data_path = resolve_data_path(args.data_dir)
-    model_dir = find_model_dir(load_model_module(args.organ).NNUNET_TASK, data_path)
+    model_dir = find_model_dir(mod.NNUNET_TASK, data_path)
 
     inputs = collect_niftis(args.img)
     if not inputs:
@@ -85,7 +73,6 @@ def main() -> None:
             device=args.device,
         )
 
-        # copy predictions to final output with suffix/prefix naming
         for inp, pred_file in zip(inputs, sorted(tmp_out.glob('*.nii.gz'))):
             dest = build_output_path(inp, out_dir, args.out_prefix, args.out_suffix)
             if not args.overwrite and dest.exists():
