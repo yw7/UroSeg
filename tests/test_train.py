@@ -236,7 +236,7 @@ def test_train_calls_nnunet_train(tmp_path):
     assert "10" in train_cmd  # dataset_id
     assert "3d_fullres" in train_cmd
     assert "0" in train_cmd   # fold
-    assert "nnUNetTrainerDAExt" in train_cmd
+    assert "nnUNetTrainerDAExtGPU" in train_cmd
 
 
 def test_train_skips_preprocess_if_done(tmp_path):

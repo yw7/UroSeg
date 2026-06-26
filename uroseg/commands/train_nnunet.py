@@ -144,7 +144,7 @@ def main() -> None:
         print(f"Preprocessing already done ({n_pkl} samples), skipping.")
 
     from auglab.add_trainer import add_trainer as _add_trainer
-    _add_trainer("nnUNetTrainerDAExt")
+    _add_trainer("nnUNetTrainerDAExtGPU")
 
     if args.auglab_config:
         os.environ["AUGLAB_CONFIG"] = str(args.auglab_config)
@@ -152,7 +152,7 @@ def main() -> None:
     results_dir = data_path / "nnUNet" / "results"
     exports_dir = data_path / "nnUNet" / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
-    trainer_tag = "nnUNetTrainerDAExt__nnUNetPlans__3d_fullres"
+    trainer_tag = "nnUNetTrainerDAExtGPU__nnUNetPlans__3d_fullres"
 
     # Train (--c resumes from checkpoint if interrupted)
     n_npy = _count_files(preprocessed_data_dir, "*.npy")
@@ -160,7 +160,7 @@ def main() -> None:
     train_cmd = [
         "nnUNetv2_train",
         str(dataset_id), "3d_fullres", str(args.fold),
-        "-tr", "nnUNetTrainerDAExt", "--c", "-device", args.device,
+        "-tr", "nnUNetTrainerDAExtGPU", "--c", "-device", args.device,
     ]
     if n_npy == 2 * n_npz_now and n_npz_now > 0:
         train_cmd.append("--use_compressed")
@@ -179,7 +179,7 @@ def main() -> None:
             "-o", str(zip_path),
             "-c", "3d_fullres",
             "-f", str(args.fold),
-            "-tr", "nnUNetTrainerDAExt",
+            "-tr", "nnUNetTrainerDAExtGPU",
         ],
         check=True,
     )
@@ -200,7 +200,7 @@ def main() -> None:
                 "-o", str(test_pred_dir),
                 "-f", str(args.fold),
                 "-c", "3d_fullres",
-                "-tr", "nnUNetTrainerDAExt",
+                "-tr", "nnUNetTrainerDAExtGPU",
             ],
             check=True,
         )
