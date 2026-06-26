@@ -57,6 +57,12 @@ def resolve_data_path(data_dir: str | None = None) -> Path:
     return Path.home() / 'uroseg'
 
 
+def data_dir_help() -> str:
+    if 'UROSEG_DATA' in os.environ:
+        return f"Override data path (UROSEG_DATA={os.environ['UROSEG_DATA']})"
+    return 'Override data path (default: ~/uroseg/)'
+
+
 def load_model_module(name: str):
     from importlib import import_module
     available = sorted(

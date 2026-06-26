@@ -166,7 +166,7 @@ git commit -m "feat: package scaffold and pyproject.toml"
     "4": "prostate_afs"
   },
   "regions_class_order": [1, 2, 3, 4],
-  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
+  "weights_url": "https://github.com/yw7/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
 }
 ```
 
@@ -182,7 +182,7 @@ git commit -m "feat: package scaffold and pyproject.toml"
     "0": "background",
     "1": "bladder"
   },
-  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
+  "weights_url": "https://github.com/yw7/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
 }
 ```
 
@@ -1152,12 +1152,12 @@ from uroseg.commands.install import (
 
 
 def test_extract_release_id():
-    url = 'https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip'
+    url = 'https://github.com/yw7/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip'
     assert extract_release_id(url) == 'r20260101'
 
 
 def test_get_install_dir(tmp_path):
-    url = 'https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip'
+    url = 'https://github.com/yw7/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip'
     d = get_install_dir('Dataset001_Prostate', url, tmp_path)
     assert d == tmp_path / 'nnUNet' / 'results' / 'r20260101' / 'Dataset001_Prostate'
 

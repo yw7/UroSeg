@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from uroseg.utils.utils import resolve_data_path, load_model_module, get_all_models
+from uroseg.utils.utils import resolve_data_path, load_model_module, get_all_models, data_dir_help
 from uroseg.utils.inference_utils import download_weights
 
 
@@ -41,7 +41,7 @@ def main() -> None:
     group.add_argument('--model', nargs='+', metavar='MODEL',
                        help='One or more organ model names (e.g. prostate bladder)')
     group.add_argument('--all', action='store_true', help='Install all available models')
-    parser.add_argument('--data-dir', default=None, help='Override data path')
+    parser.add_argument('--data-dir', default=None, help=data_dir_help())
     args = parser.parse_args()
 
     data_path = resolve_data_path(args.data_dir)

@@ -29,10 +29,12 @@ Four fields only — name, description, download URL, labels. Everything else is
 
 ### Model Python files
 
-Each model in `uroseg/resources/models/<name>.py` has three required attributes:
+Each model in `uroseg/resources/models/<name>.py` is a self-contained CLI entry point:
 
 ```python
+import argparse
 from uroseg.models import ModelDef
+from uroseg.utils.inference_utils import add_common_inference_args, run_nnunet_predict
 
 MODEL = ModelDef(
     name="prostate",
@@ -43,21 +45,27 @@ MODEL = ModelDef(
 
 NNUNET_TASK = "Dataset101_Prostate"
 
-def inference(img, predict):
-    return predict(img)
+
+def main():
+    parser = argparse.ArgumentParser(prog='uroseg prostate')
+    add_common_inference_args(parser)
+    args = parser.parse_args()
+    run_nnunet_predict(NNUNET_TASK, args)
 ```
 
 - `MODEL` — `ModelDef` instance (used by install, list)
-- `NNUNET_TASK` — nnU-Net dataset string (used by inference, install, train); required for all current models; future non-nnU-Net backends will use different constants
-- `inference(img, predict)` — required; owns the full prediction pipeline. `img` is the input `Image`, `predict` is a callable `Image → Image` that runs nnU-Net. Return value is the final segmentation `Image`. Pre/post processing go here when needed.
+- `NNUNET_TASK` — nnU-Net dataset string (used by install, train)
+- `main()` — full CLI entry point; owns argument parsing and inference pipeline. Can add model-specific args before calling `run_nnunet_predict`, or bypass it entirely for custom pipelines.
 
-Example with custom processing:
+Example with a model-specific flag:
 
 ```python
-def inference(img, predict):
-    img = img.resample([0.5, 0.5, 0.5])
-    seg = predict(img)
-    return keep_largest_component(seg)
+def main():
+    parser = argparse.ArgumentParser(prog='uroseg kidney')
+    add_common_inference_args(parser)
+    parser.add_argument('--bilateral', action='store_true', help='Segment both kidneys')
+    args = parser.parse_args()
+    run_nnunet_predict(NNUNET_TASK, args)
 ```
 
 The old `prostate.json` and `bladder.json` are deleted.
@@ -91,31 +99,60 @@ def get_all_models() -> dict[str, ModelDef]:
     return result
 ```
 
-### Inference pipeline — `inference.py`
+### Shared inference utilities — `uroseg/utils/inference_utils.py`
+
+New file providing utilities all model `main()` functions can import:
 
 ```python
-mod = load_model_module(organ)
-model = mod.MODEL        # ModelDef
-nnunet_task = mod.NNUNET_TASK
+def add_common_inference_args(parser) -> None:
+    """Add --img, --out, --fold, --device, --data-dir, --out-suffix, --out-prefix, -r, -w, -q."""
 
-def predict_fn(img: Image) -> Image:
-    # existing nnU-Net predict call
-    ...
+def run_nnunet_predict(nnunet_task: str, args) -> None:
+    """Full pipeline: collect inputs, reorient to RAS, run nnU-Net, save outputs."""
 
-seg = mod.inference(img, predict_fn)
+def download_weights(url: str, destination: Path) -> None:
+    """Download zip from url and extract to destination directory."""
 ```
 
-`inference.py` no longer accesses `model['nnunet_task']` or `model['labels']` — it gets `nnunet_task` from `mod.NNUNET_TASK` and delegates the full pipeline to `mod.inference`.
+`run_nnunet_predict` uses `args.img`, `args.out`, `args.fold`, `args.device`, `args.data_dir`, `args.out_suffix`, `args.out_prefix`, `args.overwrite`, `args.quiet`.
+
+### CLI dispatch — `cli.py`
+
+`_dispatch_model` changes from calling `inference.main()` to:
+
+```python
+def _dispatch_model(model: str) -> None:
+    from uroseg.utils.utils import load_model_module
+    try:
+        mod = load_model_module(model)
+    except ValueError:
+        print(f"Unknown model or subcommand: '{model}'\nRun 'uroseg --help' to see available models and commands.", file=sys.stderr)
+        sys.exit(1)
+    sys.argv = sys.argv[:1] + sys.argv[2:]
+    mod.main()
+```
+
+`inference.py` is deleted.
 
 ### `install.py`
 
-```python
-mod = load_model_module(name)
-model = mod.MODEL          # ModelDef — for weights_url, name
-nnunet_task = mod.NNUNET_TASK
-```
+Uses `download_weights(url, destination)` from `inference_utils.py`. `download_and_extract` becomes:
 
-Replaces `model['weights_url']`, `model['nnunet_task']`, `model['name']` with `model.weights_url`, `mod.NNUNET_TASK`, `model.name`.
+```python
+def download_and_extract(model, nnunet_task: str, data_path: Path) -> None:
+    url = model.weights_url
+    if not url:
+        print(f"  {model.name}: no weights_url — skipping.")
+        return
+    if is_installed(nnunet_task, url, data_path):
+        print(f"  {model.name}: already installed.")
+        return
+    release_id = extract_release_id(url)
+    results_dir = data_path / 'nnUNet' / 'results' / release_id
+    print(f"  Downloading {model.name}...")
+    download_weights(url, results_dir)
+    print(f"  Done. Weights installed at {results_dir / nnunet_task}")
+```
 
 ### `train_nnunet.py`
 
@@ -132,25 +169,28 @@ Replaces `model['labels']`, `model['nnunet_task']` with `model.labels`, `mod.NNU
 | File | Change |
 |------|--------|
 | `uroseg/models.py` | Create — `ModelDef` dataclass |
-| `uroseg/resources/models/prostate.py` | Create — replaces `prostate.json` |
-| `uroseg/resources/models/bladder.py` | Create — replaces `bladder.json` |
+| `uroseg/resources/models/prostate.py` | Create — replaces `prostate.json`; has `MODEL`, `NNUNET_TASK`, `main()` |
+| `uroseg/resources/models/bladder.py` | Create — replaces `bladder.json`; has `MODEL`, `NNUNET_TASK`, `main()` |
 | `uroseg/resources/models/prostate.json` | Delete |
 | `uroseg/resources/models/bladder.json` | Delete |
 | `uroseg/utils/utils.py` | Add `load_model_module()`; update `get_model()`, `get_all_models()` |
-| `uroseg/commands/inference.py` | Use `load_model_module()`, `mod.NNUNET_TASK`, `mod.inference()` |
-| `uroseg/commands/install.py` | Use `load_model_module()`, attribute access |
+| `uroseg/utils/inference_utils.py` | Create — `add_common_inference_args`, `run_nnunet_predict`, `download_weights` |
+| `uroseg/commands/inference.py` | Delete |
+| `uroseg/commands/install.py` | Use `download_weights(url, destination)` from `inference_utils` |
 | `uroseg/commands/train_nnunet.py` | Use `load_model_module()`, attribute access |
+| `uroseg/cli.py` | `_dispatch_model` calls `load_model_module(model).main()` |
 | `pyproject.toml` | Remove `*.json` from package-data |
-| `tests/` | Update model fixtures; add `ModelDef` and module-loading tests |
+| `tests/` | Update model fixtures; add `ModelDef`, module-loading, and inference_utils tests |
 
 ## Tests
 
-- `test_model_def_fields`: `ModelDef` has `name`, `description`, `weights_url`, `labels`
-- `test_load_model_module_prostate`: `load_model_module('prostate')` returns module with `MODEL`, `NNUNET_TASK`, `inference`
+- `test_modeldef_fields`: `ModelDef` has `name`, `description`, `weights_url`, `labels`
+- `test_load_model_module_prostate`: `load_model_module('prostate')` returns module with `MODEL`, `NNUNET_TASK`, `main`
 - `test_get_model_returns_modeldef`: `get_model('prostate')` returns a `ModelDef`
 - `test_get_all_models_returns_dict`: `get_all_models()` returns `{'prostate': ModelDef, 'bladder': ModelDef}`
 - `test_load_model_module_unknown_raises`: `load_model_module('nonexistent')` raises `ValueError`
-- `test_inference_fn_called`: `mod.inference(img, predict_fn)` is called; `predict_fn` receives the (possibly preprocessed) image
+- `test_add_common_inference_args`: parser gets all expected flags
+- `test_prostate_main_parser`: `uroseg prostate --help` exits 0; parser built with `prog='uroseg prostate'`
 - Update existing tests: any `model['key']` access → `model.key` or `mod.NNUNET_TASK`
 
 ## Out of scope

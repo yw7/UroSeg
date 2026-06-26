@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from uroseg.utils.utils import add_common_args, resolve_data_path, collect_niftis
+from uroseg.utils.utils import add_common_args, resolve_data_path, collect_niftis, data_dir_help
 
 
 def find_model_dir(nnunet_task: str, data_path: Path) -> Path:
@@ -107,7 +107,7 @@ def main() -> None:
     parser.add_argument('--task', required=True, help='nnUNet task name (e.g. Dataset001_Prostate)')
     parser.add_argument('--fold', type=int, default=0)
     parser.add_argument('--device', default='cuda', choices=['cuda', 'cpu', 'mps'])
-    parser.add_argument('--data-dir', default=None)
+    parser.add_argument('--data-dir', default=None, help=data_dir_help())
     add_common_args(parser)
     args = parser.parse_args()
 

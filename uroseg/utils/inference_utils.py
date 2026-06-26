@@ -9,7 +9,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from uroseg.utils.image import Image
-from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path, resolve_data_path
+from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path, resolve_data_path, data_dir_help
 from uroseg.commands.predict_nnunet import find_model_dir, predict
 
 
@@ -20,7 +20,7 @@ def add_common_inference_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--device', '-d', default='cuda', choices=['cuda', 'cpu', 'mps'])
     parser.add_argument('--out-suffix', default='_seg', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
-    parser.add_argument('--data-dir', default=None, help='Override data path (or set UROSEG_DATA)')
+    parser.add_argument('--data-dir', default=None, help=data_dir_help())
     add_common_args(parser)
 
 

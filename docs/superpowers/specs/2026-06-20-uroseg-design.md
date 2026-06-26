@@ -100,7 +100,7 @@ Each organ model is a JSON file in `uroseg/resources/models/`. Each model is a *
     "0": "background",
     "1": "bladder"
   },
-  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
+  "weights_url": "https://github.com/yw7/uroseg/releases/download/r20260101/Dataset010_Bladder_r20260101.zip"
 }
 ```
 
@@ -120,7 +120,7 @@ A single model outputs the whole prostate and its internal zones simultaneously:
     "4": "prostate_afs"
   },
   "regions_class_order": [1, 2, 3, 4],
-  "weights_url": "https://github.com/neuropoly/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
+  "weights_url": "https://github.com/yw7/uroseg/releases/download/r20260101/Dataset001_Prostate_r20260101.zip"
 }
 ```
 

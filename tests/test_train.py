@@ -136,6 +136,7 @@ def test_setup_nnunet_env_sets_vars(tmp_path):
     assert os.environ["nnUNet_raw"] == str(tmp_path / "nnUNet" / "raw")
     assert os.environ["nnUNet_preprocessed"] == str(tmp_path / "nnUNet" / "preprocessed")
     assert os.environ["nnUNet_results"] == str(tmp_path / "nnUNet" / "results")
+    assert os.environ["nnUNet_exports"] == str(tmp_path / "nnUNet" / "exports")
 
 
 # ── main() integration — subprocess mocked ───────────────────────────────────
@@ -249,10 +250,14 @@ def test_train_skips_preprocess_if_done(tmp_path):
         nib.Nifti1Image(np.zeros((5, 5, 5), dtype=np.int16), np.eye(4)),
         images_tr / "case_000_0000.nii.gz",
     )
-    # Already preprocessed
-    (tmp_path / "nnUNet" / "preprocessed" / "Dataset010_Bladder").mkdir(parents=True)
+    # Scaffold fully-preprocessed state so all three prep steps are skipped
+    preprocessed_dir = tmp_path / "nnUNet" / "preprocessed" / "Dataset010_Bladder"
+    preprocessed_dir.mkdir(parents=True)
+    (preprocessed_dir / "dataset_fingerprint.json").write_text("{}")
+    (preprocessed_dir / "nnUNetPlans.json").write_text("{}")
+    # No labelsTr → n_labels=0; empty data dir → n_npz=0=n_pkl → counts match → skip
+    (preprocessed_dir / "nnUNetPlans_3d_fullres").mkdir()
 
-    # Create a mock module
     mock_module = MagicMock()
     mock_module.NNUNET_TASK = "Dataset010_Bladder"
     mock_module.MODEL = ModelDef(
@@ -277,8 +282,9 @@ def test_train_skips_preprocess_if_done(tmp_path):
             main()
 
     called_cmds = [c[0][0] for c in mock_run.call_args_list]
-    preprocess_calls = [c for c in called_cmds if c[0] == "nnUNetv2_plan_and_preprocess"]
-    assert len(preprocess_calls) == 0
+    assert "nnUNetv2_extract_fingerprint" not in called_cmds
+    assert "nnUNetv2_plan_experiment" not in called_cmds
+    assert "nnUNetv2_preprocess" not in called_cmds
 
 
 def test_train_sets_auglab_config_env(tmp_path):

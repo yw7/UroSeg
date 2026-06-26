@@ -5,10 +5,11 @@ import os
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import uroseg.utils.utils as _utils
-from uroseg.utils.utils import normalize_labels
+from uroseg.utils.utils import normalize_labels, data_dir_help
 
 
 def extract_dataset_id(nnunet_task: str) -> int:
@@ -46,6 +47,13 @@ def setup_nnunet_env(data_path: Path) -> None:
     os.environ["nnUNet_raw"] = str(nnunet_dir / "raw")
     os.environ["nnUNet_preprocessed"] = str(nnunet_dir / "preprocessed")
     os.environ["nnUNet_results"] = str(nnunet_dir / "results")
+    os.environ["nnUNet_exports"] = str(nnunet_dir / "exports")
+
+
+def _count_files(directory: Path, pattern: str) -> int:
+    if not directory.exists():
+        return 0
+    return len(list(directory.glob(pattern)))
 
 
 def main() -> None:
@@ -53,16 +61,15 @@ def main() -> None:
         prog='uroseg train nnunet',
         description="Train a UroSeg model with nnU-Net and AugLab augmentation.",
     )
-    parser.add_argument("organ",
-                        help="Organ name matching resources/models/<organ>.py")
+    parser.add_argument("organ", help="Organ name matching resources/models/<organ>.py")
     parser.add_argument("--fold", "-f", type=int, default=0,
                         help="nnU-Net fold number (0–4, default: 0)")
     parser.add_argument("--auglab-config", default=None,
                         help="Path to AugLab augmentation config JSON (optional)")
-    parser.add_argument("--gpus", type=int, default=1,
-                        help="Number of GPUs (default: 1)")
-    parser.add_argument("--data-dir", default=None,
-                        help="Override UROSEG_DATA / ~/uroseg/ with this path")
+    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu", "mps"],
+                        help="Training device (default: cuda)")
+    parser.add_argument("--gpus", type=int, default=1, help="Number of GPUs (default: 1)")
+    parser.add_argument("--data-dir", default=None, help=data_dir_help())
     args = parser.parse_args()
 
     mod = _utils.load_model_module(args.organ)
@@ -74,6 +81,7 @@ def main() -> None:
 
     raw_dir = data_path / "nnUNet" / "raw" / nnunet_task
     images_tr = raw_dir / "imagesTr"
+    labels_tr = raw_dir / "labelsTr"
 
     if not images_tr.exists():
         print(
@@ -89,10 +97,33 @@ def main() -> None:
     print(f"Generated {dataset_json_path}")
 
     preprocessed_dir = data_path / "nnUNet" / "preprocessed" / nnunet_task
-    if not preprocessed_dir.exists():
-        print("Running nnU-Net planning and preprocessing...")
+    data_identifier = "nnUNetPlans_3d_fullres"
+    preprocessed_data_dir = preprocessed_dir / data_identifier
+
+    # Extract fingerprint (skip if already done)
+    if not (preprocessed_dir / "dataset_fingerprint.json").exists():
+        print("Extracting dataset fingerprint...")
         subprocess.run(
-            ["nnUNetv2_plan_and_preprocess", "-d", str(dataset_id), "--verify_dataset_integrity"],
+            ["nnUNetv2_extract_fingerprint", "-d", str(dataset_id)],
+            check=True,
+        )
+
+    # Plan experiment (skip if already done)
+    if not (preprocessed_dir / "nnUNetPlans.json").exists():
+        print("Planning experiment...")
+        subprocess.run(
+            ["nnUNetv2_plan_experiment", "-d", str(dataset_id)],
+            check=True,
+        )
+
+    # Preprocess 3d_fullres only (skip if file counts match labels)
+    n_labels = _count_files(labels_tr, "*.nii.gz")
+    n_npz = _count_files(preprocessed_data_dir, "*.npz")
+    n_pkl = _count_files(preprocessed_data_dir, "*.pkl")
+    if not preprocessed_data_dir.exists() or n_npz != n_labels or n_pkl != n_labels:
+        print("Preprocessing dataset (3d_fullres)...")
+        subprocess.run(
+            ["nnUNetv2_preprocess", "-d", str(dataset_id), "-c", "3d_fullres"],
             check=True,
         )
 
@@ -103,22 +134,97 @@ def main() -> None:
         os.environ["AUGLAB_CONFIG"] = str(args.auglab_config)
 
     results_dir = data_path / "nnUNet" / "results"
+    exports_dir = data_path / "nnUNet" / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    trainer_tag = "nnUNetTrainerDAExt__nnUNetPlans__3d_fullres"
+
+    # Train (--c resumes from checkpoint if interrupted)
+    n_npy = _count_files(preprocessed_data_dir, "*.npy")
+    n_npz_now = _count_files(preprocessed_data_dir, "*.npz")
+    train_cmd = [
+        "nnUNetv2_train",
+        str(dataset_id), "3d_fullres", str(args.fold),
+        "-tr", "nnUNetTrainerDAExt", "--c", "-device", args.device,
+    ]
+    if n_npy == 2 * n_npz_now and n_npz_now > 0:
+        train_cmd.append("--use_compressed")
     print(f"Starting training (dataset {dataset_id}, fold {args.fold})...")
+    subprocess.run(train_cmd, check=True)
+
+    # Export model to zip
+    zip_name = f"{nnunet_task}__{trainer_tag}__fold_{args.fold}.zip"
+    zip_path = exports_dir / zip_name
+    (results_dir / nnunet_task / "ensembles").mkdir(parents=True, exist_ok=True)
+    print(f"Exporting model to {zip_path}...")
     subprocess.run(
         [
-            "nnUNetv2_train",
-            str(dataset_id),
-            "3d_fullres",
-            str(args.fold),
-            "--trainer", "nnUNetTrainerDAExt",
+            "nnUNetv2_export_model_to_zip",
+            "-d", str(dataset_id),
+            "-o", str(zip_path),
+            "-c", "3d_fullres",
+            "-f", str(args.fold),
+            "-tr", "nnUNetTrainerDAExt",
         ],
         check=True,
     )
 
-    trainer_dir = (
-        results_dir
-        / nnunet_task
-        / "nnUNetTrainerDAExt__nnUNetPlans__3d_fullres"
-        / f"fold_{args.fold}"
-    )
-    print(f"\nTraining complete. Model saved to:\n  {trainer_dir}")
+    # Predict and evaluate test set (if imagesTs/ and labelsTs/ exist)
+    images_ts = raw_dir / "imagesTs"
+    labels_ts = raw_dir / "labelsTs"
+    test_pred_dir = results_dir / nnunet_task / trainer_tag / f"fold_{args.fold}" / "test"
+
+    if images_ts.exists() and _count_files(images_ts, "*.nii.gz") > 0:
+        test_pred_dir.mkdir(parents=True, exist_ok=True)
+        print("Predicting on test set...")
+        subprocess.run(
+            [
+                "nnUNetv2_predict",
+                "-d", str(dataset_id),
+                "-i", str(images_ts),
+                "-o", str(test_pred_dir),
+                "-f", str(args.fold),
+                "-c", "3d_fullres",
+                "-tr", "nnUNetTrainerDAExt",
+            ],
+            check=True,
+        )
+
+        if labels_ts.exists() and _count_files(labels_ts, "*.nii.gz") > 0:
+            trainer_results_dir = results_dir / nnunet_task / trainer_tag
+            print("Evaluating test predictions...")
+            subprocess.run(
+                [
+                    "nnUNetv2_evaluate_folder",
+                    str(labels_ts),
+                    str(test_pred_dir),
+                    "-djfile", str(trainer_results_dir / "dataset.json"),
+                    "-pfile", str(trainer_results_dir / "plans.json"),
+                ],
+                check=True,
+            )
+
+            summary_json = test_pred_dir / "summary.json"
+            if summary_json.exists():
+                print("Adding summary.json to export zip...")
+                with zipfile.ZipFile(zip_path, 'a') as zf:
+                    zf.write(summary_json, arcname=str(summary_json.relative_to(results_dir)))
+
+    # Add dataset file list and splits to zip
+    dataset_listing = results_dir / nnunet_task / "dataset_files.json"
+    (results_dir / nnunet_task).mkdir(parents=True, exist_ok=True)
+    listing: dict[str, list[str]] = {}
+    for item in sorted(raw_dir.iterdir()):
+        if item.is_dir():
+            listing[item.name] = sorted(f.name for f in item.iterdir())
+    dataset_listing.write_text(json.dumps(listing, indent=2))
+    with zipfile.ZipFile(zip_path, 'a') as zf:
+        zf.write(dataset_listing, arcname=str(dataset_listing.relative_to(results_dir)))
+
+    splits_json = preprocessed_dir / "splits_final.json"
+    if splits_json.exists():
+        with zipfile.ZipFile(zip_path, 'a') as zf:
+            zf.write(splits_json, arcname=str(splits_json.relative_to(preprocessed_dir.parent)))
+
+    print(f"\nTraining complete.")
+    print(f"  Model: {results_dir / nnunet_task / trainer_tag / f'fold_{args.fold}'}")
+    print(f"  Export: {zip_path}")

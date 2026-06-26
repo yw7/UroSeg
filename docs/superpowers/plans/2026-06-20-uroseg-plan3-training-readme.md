@@ -707,7 +707,7 @@ pip install uroseg
 Development install:
 
 ```bash
-git clone https://github.com/neuropoly/uroseg
+git clone https://github.com/yw7/uroseg
 cd uroseg
 pip install -e .
 ```
