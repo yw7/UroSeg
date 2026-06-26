@@ -125,15 +125,14 @@ def main() -> None:
             data_identifier = identifier
     preprocessed_data_dir = preprocessed_dir / data_identifier
 
-    # Preprocess 3d_fullres only (skip if file counts match labels)
+    # Preprocess 3d_fullres only (skip if .pkl count matches label count).
+    # .pkl files are always written 1-per-case by nnU-Net regardless of whether
+    # data is stored as .npz or .npy, so they are a reliable completion marker.
     n_labels = _count_files(labels_tr, "*.nii.gz")
-    n_npz = _count_files(preprocessed_data_dir, "*.npz")
     n_pkl = _count_files(preprocessed_data_dir, "*.pkl")
-    if not preprocessed_data_dir.exists() or n_npz != n_labels or n_pkl != n_labels:
+    if not preprocessed_data_dir.exists() or n_pkl != n_labels:
         if not preprocessed_data_dir.exists():
             reason = f"{preprocessed_data_dir.name} not found"
-        elif n_npz != n_labels:
-            reason = f"{n_npz} .npz vs {n_labels} labels in labelsTr"
         else:
             reason = f"{n_pkl} .pkl vs {n_labels} labels in labelsTr"
         print(f"Preprocessing dataset (3d_fullres) [{reason}]...")
@@ -142,7 +141,7 @@ def main() -> None:
             check=True,
         )
     else:
-        print(f"Preprocessing already done ({n_npz} samples), skipping.")
+        print(f"Preprocessing already done ({n_pkl} samples), skipping.")
 
     from auglab.add_trainer import add_trainer as _add_trainer
     _add_trainer("nnUNetTrainerDAExt")
