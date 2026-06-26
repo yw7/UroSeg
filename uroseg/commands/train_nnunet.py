@@ -144,7 +144,7 @@ def main() -> None:
         print(f"Preprocessing already done ({n_pkl} samples), skipping.")
 
     from auglab.add_trainer import add_trainer as _add_trainer
-    _add_trainer("nnUNetTrainerDAExtGPU")
+    _add_trainer("nnUNetTrainerDAExt")
 
     if args.auglab_config:
         os.environ["AUGLAB_CONFIG"] = str(args.auglab_config)
