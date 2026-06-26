@@ -97,8 +97,6 @@ def main() -> None:
     print(f"Generated {dataset_json_path}")
 
     preprocessed_dir = data_path / "nnUNet" / "preprocessed" / nnunet_task
-    data_identifier = "nnUNetPlans_3d_fullres"
-    preprocessed_data_dir = preprocessed_dir / data_identifier
 
     # Extract fingerprint (skip if already done)
     if not (preprocessed_dir / "dataset_fingerprint.json").exists():
@@ -116,16 +114,35 @@ def main() -> None:
             check=True,
         )
 
+    # Read data_identifier from plans file (nnU-Net stores this inside nnUNetPlans.json)
+    # so we derive the preprocessed data directory name rather than hardcoding it
+    plans_file = preprocessed_dir / "nnUNetPlans.json"
+    data_identifier = "nnUNetPlans_3d_fullres"  # fallback
+    if plans_file.exists():
+        plans = json.loads(plans_file.read_text())
+        identifier = plans.get("configurations", {}).get("3d_fullres", {}).get("data_identifier")
+        if identifier:
+            data_identifier = identifier
+    preprocessed_data_dir = preprocessed_dir / data_identifier
+
     # Preprocess 3d_fullres only (skip if file counts match labels)
     n_labels = _count_files(labels_tr, "*.nii.gz")
     n_npz = _count_files(preprocessed_data_dir, "*.npz")
     n_pkl = _count_files(preprocessed_data_dir, "*.pkl")
     if not preprocessed_data_dir.exists() or n_npz != n_labels or n_pkl != n_labels:
-        print("Preprocessing dataset (3d_fullres)...")
+        if not preprocessed_data_dir.exists():
+            reason = f"{preprocessed_data_dir.name} not found"
+        elif n_npz != n_labels:
+            reason = f"{n_npz} .npz vs {n_labels} labels in labelsTr"
+        else:
+            reason = f"{n_pkl} .pkl vs {n_labels} labels in labelsTr"
+        print(f"Preprocessing dataset (3d_fullres) [{reason}]...")
         subprocess.run(
             ["nnUNetv2_preprocess", "-d", str(dataset_id), "-c", "3d_fullres"],
             check=True,
         )
+    else:
+        print(f"Preprocessing already done ({n_npz} samples), skipping.")
 
     from auglab.add_trainer import add_trainer as _add_trainer
     _add_trainer("nnUNetTrainerDAExt")
