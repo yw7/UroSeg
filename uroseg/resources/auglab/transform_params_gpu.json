@@ -1,0 +1,45 @@
+{
+  "GPU": {
+    "GaussianNoiseTransform": {
+      "mean": 0.0,
+      "std": 0.1,
+      "probability": 0.15
+    },
+    "GaussianBlurTransform": {
+      "sigma": 0.75,
+      "probability": 0.15
+    },
+    "BrightnessTransform": {
+      "brightness_range": [0.75, 1.25],
+      "probability": 0.15
+    },
+    "GammaTransform": {
+      "gamma_range": [0.7, 1.5],
+      "retain_stats": true,
+      "probability": 0.15
+    },
+    "ContrastTransform": {
+      "contrast_range": [0.75, 1.25],
+      "retain_stats": true,
+      "probability": 0.15
+    },
+    "BiasFieldTransform": {
+      "coefficients": 0.5,
+      "probability": 0.15
+    },
+    "FlipTransform": {
+      "flip_axis": [0, 1, 2],
+      "probability": 0.5,
+      "same_on_batch": false,
+      "keepdim": true
+    },
+    "AffineTransform": {
+      "degrees": 15,
+      "translate": [0.1, 0.1, 0.1],
+      "scale": [0.85, 1.15],
+      "shear": [-10, 10, -10, 10, -10, 10],
+      "resample": "bilinear",
+      "probability": 0.2
+    }
+  }
+}

@@ -307,7 +307,7 @@ def test_train_sets_auglab_config_env(tmp_path):
 
     def capture_run(cmd, **kwargs):
         if cmd[0] == "nnUNetv2_train":
-            captured_env["AUGLAB_CONFIG"] = os.environ.get("AUGLAB_CONFIG")
+            captured_env["AUGLAB_PARAMS_GPU_JSON"] = os.environ.get("AUGLAB_PARAMS_GPU_JSON")
 
     # Create a mock module
     mock_module = MagicMock()
@@ -333,7 +333,7 @@ def test_train_sets_auglab_config_env(tmp_path):
         ]):
             main()
 
-    assert captured_env.get("AUGLAB_CONFIG") == str(auglab_cfg)
+    assert captured_env.get("AUGLAB_PARAMS_GPU_JSON") == str(auglab_cfg)
 
 
 def test_train_fails_when_no_images_tr(tmp_path):

@@ -144,10 +144,16 @@ def main() -> None:
         print(f"Preprocessing already done ({n_pkl} samples), skipping.")
 
     from auglab.add_trainer import add_trainer as _add_trainer
-    _add_trainer("nnUNetTrainerDAExt")
+    _add_trainer("nnUNetTrainerDAExtGPU")
 
+    # Point auglab to our bundled GPU config unless the user overrides it
     if args.auglab_config:
-        os.environ["AUGLAB_CONFIG"] = str(args.auglab_config)
+        os.environ["AUGLAB_PARAMS_GPU_JSON"] = str(args.auglab_config)
+    elif "AUGLAB_PARAMS_GPU_JSON" not in os.environ:
+        from importlib.resources import files as _res_files
+        import uroseg.resources.auglab as _auglab_res
+        bundled = _res_files(_auglab_res) / "transform_params_gpu.json"
+        os.environ["AUGLAB_PARAMS_GPU_JSON"] = str(bundled)
 
     results_dir = data_path / "nnUNet" / "results"
     exports_dir = data_path / "nnUNet" / "exports"
