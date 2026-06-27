@@ -130,6 +130,19 @@ class SegModel:
         save_nifti_seg(seg.data, seg.affine, seg.header, str(out_path))
         return out_path
 
+    def _predict_batch(self, predictor, inputs: list, out_dir: Path,
+                       iso: bool, dest_fn) -> None:
+        """Inner loop shared by predict_dir and predict_cli."""
+        for inp in inputs:
+            img_orig = Image.load(inp)
+            img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
+            seg = self.predict_image(predictor, img_1mm)
+            if self.post_largest_component:
+                seg.data = keep_largest_component(seg.data, binarize=True)
+            if not iso:
+                seg = resample_seg_to_image(seg, img_orig)
+            save_nifti_seg(seg.data, seg.affine, seg.header, str(dest_fn(inp)))
+
     def predict_dir(self, input_dir: Path, output_dir: Path,
                     fold: int = 0, device: str = 'cuda', iso: bool = False) -> None:
         """Batch Python API: predict all NIfTIs in a directory, predictor init once."""
@@ -139,15 +152,8 @@ class SegModel:
         output_dir.mkdir(parents=True, exist_ok=True)
         model_dir = _find_model_dir(self.name, _resolve_data_dir())
         predictor = self.init_predictor(model_dir, fold=fold, device=device)
-        for inp in inputs:
-            img_orig = Image.load(inp)
-            img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
-            seg = self.predict_image(predictor, img_1mm)
-            if self.post_largest_component:
-                seg.data = keep_largest_component(seg.data, binarize=True)
-            if not iso:
-                seg = resample_seg_to_image(seg, img_orig)
-            save_nifti_seg(seg.data, seg.affine, seg.header, str(output_dir / inp.name))
+        self._predict_batch(predictor, inputs, output_dir, iso,
+                            dest_fn=lambda inp: output_dir / inp.name)
 
     def predict_cli(self, args) -> None:
         """CLI batch prediction: auto-install, tqdm progress, predictor init once."""
@@ -166,18 +172,15 @@ class SegModel:
         out_dir = Path(args.out)
         out_dir.mkdir(parents=True, exist_ok=True)
         predictor = self.init_predictor(model_dir, fold=args.fold, device=args.device)
-        for inp in tqdm(inputs, desc=f'uroseg {self.name}', disable=args.quiet):
-            dest = build_output_path(inp, out_dir, args.out_prefix, args.out_suffix)
-            if not args.overwrite and dest.exists():
-                continue
-            img_orig = Image.load(inp)
-            img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
-            seg = self.predict_image(predictor, img_1mm)
-            if self.post_largest_component:
-                seg.data = keep_largest_component(seg.data, binarize=True)
-            if not args.iso:
-                seg = resample_seg_to_image(seg, img_orig)
-            save_nifti_seg(seg.data, seg.affine, seg.header, str(dest))
+        filtered = [inp for inp in inputs
+                    if args.overwrite or not build_output_path(
+                        inp, out_dir, args.out_prefix, args.out_suffix).exists()]
+        self._predict_batch(
+            predictor,
+            tqdm(filtered, desc=f'uroseg {self.name}', disable=args.quiet),
+            out_dir, args.iso,
+            dest_fn=lambda inp: build_output_path(inp, out_dir, args.out_prefix, args.out_suffix),
+        )
         if not args.quiet:
             print(f"Segmentations saved to {out_dir}")
 
