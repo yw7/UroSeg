@@ -8,7 +8,7 @@ import numpy as np
 from tqdm.contrib.concurrent import process_map
 
 from uroseg.utils.image import Image, save_nifti_seg
-from uroseg.utils.utils import add_common_args, build_pairs, collect_niftis
+from uroseg.utils.utils import add_common_args, build_pairs, build_output_path, collect_niftis
 
 
 def apply_map(data: np.ndarray, mapping: dict, keep_unmapped: bool = False) -> np.ndarray:
@@ -39,27 +39,33 @@ def _resolve_companion(companion_path: str | None, input_path: Path) -> Path | N
     return p
 
 
-def process_one(
-    pair: tuple[Path, Path],
-    mapping: dict,
-    keep_unmapped: bool,
-    update_seg: str | None,
-    update_from_seg: str | None,
-    args: argparse.Namespace,
-) -> None:
-    input_path, output_path = pair
+def map_labels(
+    input: Path | str,
+    output: Path | str,
+    map: dict,
+    keep_unmapped: bool = False,
+    update_seg: Path | str | None = None,
+    update_from_seg: Path | str | None = None,
+    out_suffix: str = "_mapped",
+    out_prefix: str = "",
+    overwrite: bool = False,
+) -> Path:
+    input_path, output_path = Path(input), Path(output)
+    if not output_path.suffix:
+        output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
+    int_map = {int(k): int(v) for k, v in map.items()}
     img = Image.load(input_path)
-    out_data = apply_map(img.data, mapping, keep_unmapped=keep_unmapped)
+    out_data = apply_map(img.data, int_map, keep_unmapped=keep_unmapped)
 
     # --update-seg: fill zeros in output with non-zero values from companion seg
-    companion = _resolve_companion(update_seg, input_path)
+    companion = _resolve_companion(str(update_seg) if update_seg else None, input_path)
     if companion is not None:
         seg_img = Image.load(companion)
         mask = out_data == 0
         out_data[mask] = seg_img.data[mask]
 
     # --update-from-seg: overwrite output where companion seg is non-zero
-    companion_from = _resolve_companion(update_from_seg, input_path)
+    companion_from = _resolve_companion(str(update_from_seg) if update_from_seg else None, input_path)
     if companion_from is not None:
         from_img = Image.load(companion_from)
         mask = from_img.data != 0
@@ -67,6 +73,39 @@ def process_one(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_seg(out_data, img.affine, img.header, str(output_path))
+    return output_path
+
+
+def map_labels_dir(
+    input_dir: Path | str,
+    output_dir: Path | str,
+    map: dict,
+    keep_unmapped: bool = False,
+    update_seg: Path | str | None = None,
+    update_from_seg: Path | str | None = None,
+    out_suffix: str = "_mapped",
+    out_prefix: str = "",
+    overwrite: bool = False,
+    n_jobs: int = 1,
+) -> None:
+    int_map = {int(k): int(v) for k, v in map.items()}
+    pairs = build_pairs(input_dir, output_dir, out_suffix, out_prefix, overwrite)
+    in_paths = [p[0] for p in pairs]
+    out_paths = [p[1] for p in pairs]
+    process_map(
+        functools.partial(
+            map_labels,
+            map=int_map,
+            keep_unmapped=keep_unmapped,
+            update_seg=str(update_seg) if update_seg else None,
+            update_from_seg=str(update_from_seg) if update_from_seg else None,
+            overwrite=overwrite,
+        ),
+        in_paths, out_paths,
+        max_workers=n_jobs,
+        disable=False,
+        desc='uroseg map',
+    )
 
 
 def main() -> None:
@@ -111,78 +150,19 @@ def main() -> None:
         }
 
     pairs = build_pairs(args.seg, args.out, args.out_suffix, args.out_prefix, args.overwrite)
+    in_paths = [p[0] for p in pairs]
+    out_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            process_one,
-            mapping=mapping,
+            map_labels,
+            map=mapping,
             keep_unmapped=args.keep_unmapped,
             update_seg=args.update_seg,
             update_from_seg=args.update_from_seg,
-            args=args,
+            overwrite=args.overwrite,
         ),
-        pairs,
+        in_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,
-        desc='uroseg map',
-    )
-
-
-def map_labels(
-    input: Path | str,
-    output: Path | str,
-    map: dict,
-    keep_unmapped: bool = False,
-    update_seg: Path | str | None = None,
-    update_from_seg: Path | str | None = None,
-    out_suffix: str = "_mapped",
-    out_prefix: str = "",
-    overwrite: bool = False,
-) -> Path:
-    import argparse
-    input_path, output_path = Path(input), Path(output)
-    if not output_path.suffix:
-        from uroseg.utils.utils import build_output_path
-        output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    int_map = {int(k): int(v) for k, v in map.items()}
-    process_one(
-        (input_path, output_path),
-        int_map,
-        keep_unmapped,
-        str(update_seg) if update_seg else None,
-        str(update_from_seg) if update_from_seg else None,
-        argparse.Namespace(quiet=True, overwrite=overwrite),
-    )
-    return output_path
-
-
-def map_labels_dir(
-    input_dir: Path | str,
-    output_dir: Path | str,
-    map: dict,
-    keep_unmapped: bool = False,
-    update_seg: Path | str | None = None,
-    update_from_seg: Path | str | None = None,
-    out_suffix: str = "_mapped",
-    out_prefix: str = "",
-    overwrite: bool = False,
-    n_jobs: int = 1,
-) -> None:
-    import argparse, functools
-    from uroseg.utils.utils import build_pairs
-    int_map = {int(k): int(v) for k, v in map.items()}
-    pairs = build_pairs(input_dir, output_dir, out_suffix, out_prefix, overwrite)
-    process_map(
-        functools.partial(
-            process_one,
-            mapping=int_map,
-            keep_unmapped=keep_unmapped,
-            update_seg=str(update_seg) if update_seg else None,
-            update_from_seg=str(update_from_seg) if update_from_seg else None,
-            args=argparse.Namespace(quiet=False, overwrite=overwrite),
-        ),
-        pairs,
-        max_workers=n_jobs,
-        disable=False,
         desc='uroseg map',
     )

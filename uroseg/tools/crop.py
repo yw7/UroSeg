@@ -10,13 +10,57 @@ from uroseg.utils.image import Image, save_nifti_image
 from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path
 
 
-def process_one(triple: tuple[Path, Path, Path], args: argparse.Namespace) -> None:
-    img_in, seg_in, img_out = triple
-    img = Image.load(img_in)
-    seg = Image.load(seg_in)
-    cropped = img.crop_to_seg(seg, margin=args.margin)
-    img_out.parent.mkdir(parents=True, exist_ok=True)
-    save_nifti_image(cropped.data, cropped.affine, cropped.header, str(img_out))
+def crop(
+    input: Path | str,
+    seg: Path | str,
+    output: Path | str,
+    margin: int = 0,
+    out_suffix: str = "_crop",
+    out_prefix: str = "",
+    overwrite: bool = False,
+) -> Path:
+    input_path, seg_path, output_path = Path(input), Path(seg), Path(output)
+    if not output_path.suffix:
+        output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
+    img = Image.load(input_path)
+    seg_img = Image.load(seg_path)
+    cropped = img.crop_to_seg(seg_img, margin=margin)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    save_nifti_image(cropped.data, cropped.affine, cropped.header, str(output_path))
+    return output_path
+
+
+def crop_dir(
+    input_dir: Path | str,
+    seg_dir: Path | str,
+    output_dir: Path | str,
+    margin: int = 0,
+    out_suffix: str = "_crop",
+    out_prefix: str = "",
+    overwrite: bool = False,
+    n_jobs: int = 1,
+) -> None:
+    imgs = collect_niftis(input_dir)
+    segs = collect_niftis(seg_dir)
+    if len(imgs) != len(segs):
+        print(f"Mismatch: {len(imgs)} images vs {len(segs)} segs.", file=sys.stderr)
+        return
+    out = Path(output_dir)
+    triples = [
+        (i, s, build_output_path(i, out, out_prefix, out_suffix))
+        for i, s in zip(imgs, segs)
+        if overwrite or not build_output_path(i, out, out_prefix, out_suffix).exists()
+    ]
+    img_paths = [t[0] for t in triples]
+    seg_paths = [t[1] for t in triples]
+    out_paths = [t[2] for t in triples]
+    process_map(
+        functools.partial(crop, margin=margin, overwrite=overwrite),
+        img_paths, seg_paths, out_paths,
+        max_workers=n_jobs,
+        disable=False,
+        desc='uroseg crop',
+    )
 
 
 def main() -> None:
@@ -47,66 +91,13 @@ def main() -> None:
         if args.overwrite
         or not build_output_path(img, out_dir, args.out_prefix, args.out_suffix).exists()
     ]
-
+    img_paths = [t[0] for t in triples]
+    seg_paths = [t[1] for t in triples]
+    out_paths = [t[2] for t in triples]
     process_map(
-        functools.partial(process_one, args=args),
-        triples,
+        functools.partial(crop, margin=args.margin, overwrite=args.overwrite),
+        img_paths, seg_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,
-        desc='uroseg crop',
-    )
-
-
-def crop(
-    input: Path | str,
-    seg: Path | str,
-    output: Path | str,
-    margin: int = 0,
-    out_suffix: str = "_crop",
-    out_prefix: str = "",
-    overwrite: bool = False,
-) -> Path:
-    import argparse
-    input_path, seg_path, output_path = Path(input), Path(seg), Path(output)
-    if not output_path.suffix:
-        from uroseg.utils.utils import build_output_path
-        output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    process_one(
-        (input_path, seg_path, output_path),
-        argparse.Namespace(margin=margin, overwrite=overwrite),
-    )
-    return output_path
-
-
-def crop_dir(
-    input_dir: Path | str,
-    seg_dir: Path | str,
-    output_dir: Path | str,
-    margin: int = 0,
-    out_suffix: str = "_crop",
-    out_prefix: str = "",
-    overwrite: bool = False,
-    n_jobs: int = 1,
-) -> None:
-    import argparse, functools, sys
-    from uroseg.utils.utils import collect_niftis, build_output_path
-    imgs = collect_niftis(input_dir)
-    segs = collect_niftis(seg_dir)
-    if len(imgs) != len(segs):
-        print(f"Mismatch: {len(imgs)} images vs {len(segs)} segs.", file=sys.stderr)
-        return
-    out = Path(output_dir)
-    args = argparse.Namespace(margin=margin, overwrite=overwrite)
-    triples = [
-        (i, s, build_output_path(i, out, out_prefix, out_suffix))
-        for i, s in zip(imgs, segs)
-        if overwrite or not build_output_path(i, out, out_prefix, out_suffix).exists()
-    ]
-    process_map(
-        functools.partial(process_one, args=args),
-        triples,
-        max_workers=n_jobs,
-        disable=False,
         desc='uroseg crop',
     )

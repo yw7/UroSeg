@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -139,25 +140,71 @@ def _build_jpg_path(
     return out_dir / f'{prefix}{stem}{suffix}_{orient}_{sliceloc}.jpg'
 
 
-def process_one(
-    pair: tuple[Path, Path | None, Path],
-    args: argparse.Namespace,
-) -> None:
-    img_path, seg_path, out_path = pair
-    img = Image.load(img_path)
-    seg_data = Image.load(seg_path).data if seg_path else None
-    label_text_right = _parse_label_text(getattr(args, 'label_text_right', []) or [])
-    label_text_left = _parse_label_text(getattr(args, 'label_text_left', []) or [])
-    preview = make_preview(
-        img.data,
-        seg_data,
-        orient=args.orient,
-        sliceloc=args.sliceloc,
-        label_text_right=label_text_right or None,
-        label_text_left=label_text_left or None,
+def preview(
+    input: Path | str,
+    output: Path | str,
+    seg: Path | str | None = None,
+    orient: str = 'sag',
+    sliceloc: float = 0.5,
+    label_text_right: dict[int, str] | None = None,
+    label_text_left: dict[int, str] | None = None,
+    out_suffix: str = "_preview",
+    out_prefix: str = "",
+    overwrite: bool = False,
+) -> Path:
+    input_path = Path(input)
+    output_path = Path(output)
+    if not str(output_path).endswith('.jpg'):
+        output_path = _build_jpg_path(input_path, output_path, out_prefix, out_suffix, orient, sliceloc)
+    img = Image.load(input_path)
+    seg_data = Image.load(seg).data if seg else None
+    rgb = make_preview(
+        img.data, seg_data,
+        orient=orient, sliceloc=sliceloc,
+        label_text_right=label_text_right,
+        label_text_left=label_text_left,
     )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    PILImage.fromarray(preview).save(str(out_path))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    PILImage.fromarray(rgb).save(str(output_path))
+    return output_path
+
+
+def preview_dir(
+    input_dir: Path | str,
+    output_dir: Path | str,
+    seg_dir: Path | str | None = None,
+    orient: str = 'sag',
+    sliceloc: float = 0.5,
+    label_text_right: dict[int, str] | None = None,
+    label_text_left: dict[int, str] | None = None,
+    out_suffix: str = "_preview",
+    out_prefix: str = "",
+    overwrite: bool = False,
+    n_jobs: int = 1,
+) -> None:
+    imgs = collect_niftis(input_dir)
+    segs = collect_niftis(seg_dir) if seg_dir else [None] * len(imgs)
+    out = Path(output_dir)
+    triples = [
+        (i, s, _build_jpg_path(i, out, out_prefix, out_suffix, orient, sliceloc))
+        for i, s in zip(imgs, segs)
+        if overwrite or not _build_jpg_path(i, out, out_prefix, out_suffix, orient, sliceloc).exists()
+    ]
+    img_paths = [t[0] for t in triples]
+    seg_paths = [t[1] for t in triples]
+    out_paths = [t[2] for t in triples]
+    process_map(
+        functools.partial(
+            preview,
+            orient=orient, sliceloc=sliceloc,
+            label_text_right=label_text_right, label_text_left=label_text_left,
+            overwrite=overwrite,
+        ),
+        img_paths, out_paths, seg_paths,
+        max_workers=n_jobs,
+        disable=False,
+        desc='uroseg preview',
+    )
 
 
 def main() -> None:
@@ -204,13 +251,15 @@ def main() -> None:
     imgs = collect_niftis(args.img)
     segs = collect_niftis(args.seg) if args.seg else [None] * len(imgs)
     if args.seg and len(segs) != len(imgs):
-        import sys
         print(
             f'Mismatch: {len(imgs)} images vs {len(segs)} segs.',
             file=sys.stderr,
         )
         sys.exit(1)
     out_dir = Path(args.out)
+
+    ltr = _parse_label_text(args.label_text_right)
+    ltl = _parse_label_text(args.label_text_left)
 
     def _out(i: Path) -> Path:
         return _build_jpg_path(
@@ -223,80 +272,18 @@ def main() -> None:
         for i, s in zip(imgs, segs)
         if args.overwrite or not _out(i).exists()
     ]
-
+    img_paths = [p[0] for p in pairs]
+    out_paths = [p[2] for p in pairs]
+    seg_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(process_one, args=args),
-        pairs,
+        functools.partial(
+            preview,
+            orient=args.orient, sliceloc=args.sliceloc,
+            label_text_right=ltr or None, label_text_left=ltl or None,
+            overwrite=args.overwrite,
+        ),
+        img_paths, out_paths, seg_paths,
         max_workers=args.max_workers,
         disable=args.quiet,
-        desc='uroseg preview',
-    )
-
-
-def preview(
-    input: Path | str,
-    output: Path | str,
-    seg: Path | str | None = None,
-    orient: str = 'sag',
-    sliceloc: float = 0.5,
-    label_text_right: dict[int, str] | None = None,
-    label_text_left: dict[int, str] | None = None,
-    out_suffix: str = "_preview",
-    out_prefix: str = "",
-    overwrite: bool = False,
-) -> Path:
-    import argparse
-    input_path = Path(input)
-    output_path = Path(output)
-    if not str(output_path).endswith('.jpg'):
-        output_path = _build_jpg_path(input_path, output_path, out_prefix, out_suffix, orient, sliceloc)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    seg_path = Path(seg) if seg else None
-    ltr = [f"{k}:{v}" for k, v in label_text_right.items()] if label_text_right else []
-    ltl = [f"{k}:{v}" for k, v in label_text_left.items()] if label_text_left else []
-    args = argparse.Namespace(
-        orient=orient, sliceloc=sliceloc,
-        label_text_right=ltr,
-        label_text_left=ltl,
-        overwrite=overwrite,
-    )
-    process_one((input_path, seg_path, output_path), args)
-    return output_path
-
-
-def preview_dir(
-    input_dir: Path | str,
-    output_dir: Path | str,
-    seg_dir: Path | str | None = None,
-    orient: str = 'sag',
-    sliceloc: float = 0.5,
-    label_text_right: dict[int, str] | None = None,
-    label_text_left: dict[int, str] | None = None,
-    out_suffix: str = "_preview",
-    out_prefix: str = "",
-    overwrite: bool = False,
-    n_jobs: int = 1,
-) -> None:
-    import argparse, functools
-    from uroseg.utils.utils import collect_niftis
-    imgs = collect_niftis(input_dir)
-    segs = collect_niftis(seg_dir) if seg_dir else [None] * len(imgs)
-    out = Path(output_dir)
-    ltr = [f"{k}:{v}" for k, v in label_text_right.items()] if label_text_right else []
-    ltl = [f"{k}:{v}" for k, v in label_text_left.items()] if label_text_left else []
-    args = argparse.Namespace(
-        orient=orient, sliceloc=sliceloc,
-        label_text_right=ltr, label_text_left=ltl, overwrite=overwrite,
-    )
-    pairs = [
-        (i, s, _build_jpg_path(i, out, out_prefix, out_suffix, orient, sliceloc))
-        for i, s in zip(imgs, segs)
-        if overwrite or not _build_jpg_path(i, out, out_prefix, out_suffix, orient, sliceloc).exists()
-    ]
-    process_map(
-        functools.partial(process_one, args=args),
-        pairs,
-        max_workers=n_jobs,
-        disable=False,
         desc='uroseg preview',
     )

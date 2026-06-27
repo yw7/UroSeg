@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse
 import functools
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -87,19 +88,60 @@ def resample_seg_to_image(seg: Image, ref: Image, interpolation: str = 'nearest'
         raise ValueError(f"Unknown interpolation mode: {interpolation!r}")
 
 
-def process_one(
-    pair: tuple[Path, Path, Path],
-    args: argparse.Namespace,
-) -> None:
-    seg_path, img_path, out_path = pair
-    seg = Image.load(seg_path)
+def transform_seg2image(
+    seg: Path | str,
+    img: Path | str,
+    output: Path | str,
+    interpolation: str = 'nearest',
+    seg_suffix: str = "_transformed",
+    seg_prefix: str = "",
+    overwrite: bool = False,
+) -> Path:
+    seg_path, img_path, output_path = Path(seg), Path(img), Path(output)
+    if not output_path.suffix:
+        output_path = build_output_path(seg_path, output_path, seg_prefix, seg_suffix)
+    seg_img = Image.load(seg_path)
     ref = Image.load(img_path)
-    result = resample_seg_to_image(seg, ref, interpolation=args.interpolation)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    if args.interpolation == 'linear':
-        save_nifti_image(result.data, result.affine, result.header, str(out_path))
+    result = resample_seg_to_image(seg_img, ref, interpolation=interpolation)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if interpolation == 'linear':
+        save_nifti_image(result.data, result.affine, result.header, str(output_path))
     else:
-        save_nifti_seg(result.data, result.affine, result.header, str(out_path))
+        save_nifti_seg(result.data, result.affine, result.header, str(output_path))
+    return output_path
+
+
+def transform_seg2image_dir(
+    seg_dir: Path | str,
+    img_dir: Path | str,
+    output_dir: Path | str,
+    interpolation: str = 'nearest',
+    seg_suffix: str = "_transformed",
+    seg_prefix: str = "",
+    overwrite: bool = False,
+    n_jobs: int = 1,
+) -> None:
+    segs = collect_niftis(seg_dir)
+    imgs = collect_niftis(img_dir)
+    if len(segs) != len(imgs):
+        print(f"Mismatch: {len(segs)} segs vs {len(imgs)} images.", file=sys.stderr)
+        return
+    out = Path(output_dir)
+    pairs = [
+        (s, i, build_output_path(s, out, seg_prefix, seg_suffix))
+        for s, i in zip(segs, imgs)
+        if overwrite or not build_output_path(s, out, seg_prefix, seg_suffix).exists()
+    ]
+    seg_paths = [p[0] for p in pairs]
+    img_paths = [p[1] for p in pairs]
+    out_paths = [p[2] for p in pairs]
+    process_map(
+        functools.partial(transform_seg2image, interpolation=interpolation, overwrite=overwrite),
+        seg_paths, img_paths, out_paths,
+        max_workers=n_jobs,
+        disable=False,
+        desc='uroseg transform_seg2image',
+    )
 
 
 def main() -> None:
@@ -122,7 +164,6 @@ def main() -> None:
     imgs = collect_niftis(args.img)
 
     if len(segs) != len(imgs):
-        import sys
         print(f"Mismatch: {len(segs)} segs vs {len(imgs)} images.", file=sys.stderr)
         sys.exit(1)
 
@@ -133,66 +174,13 @@ def main() -> None:
         if args.overwrite
         or not build_output_path(s, out_dir, args.seg_prefix, args.seg_suffix).exists()
     ]
-
+    seg_paths = [p[0] for p in pairs]
+    img_paths = [p[1] for p in pairs]
+    out_paths = [p[2] for p in pairs]
     process_map(
-        functools.partial(process_one, args=args),
-        pairs,
+        functools.partial(transform_seg2image, interpolation=args.interpolation, overwrite=args.overwrite),
+        seg_paths, img_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,
-        desc='uroseg transform_seg2image',
-    )
-
-
-def transform_seg2image(
-    seg: Path | str,
-    img: Path | str,
-    output: Path | str,
-    interpolation: str = 'nearest',
-    seg_suffix: str = "_transformed",
-    seg_prefix: str = "",
-    overwrite: bool = False,
-) -> Path:
-    import argparse
-    seg_path, img_path, output_path = Path(seg), Path(img), Path(output)
-    if not output_path.suffix:
-        from uroseg.utils.utils import build_output_path
-        output_path = build_output_path(seg_path, output_path, seg_prefix, seg_suffix)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    process_one(
-        (seg_path, img_path, output_path),
-        argparse.Namespace(interpolation=interpolation, overwrite=overwrite),
-    )
-    return output_path
-
-
-def transform_seg2image_dir(
-    seg_dir: Path | str,
-    img_dir: Path | str,
-    output_dir: Path | str,
-    interpolation: str = 'nearest',
-    seg_suffix: str = "_transformed",
-    seg_prefix: str = "",
-    overwrite: bool = False,
-    n_jobs: int = 1,
-) -> None:
-    import argparse, functools, sys
-    from uroseg.utils.utils import collect_niftis, build_output_path
-    segs = collect_niftis(seg_dir)
-    imgs = collect_niftis(img_dir)
-    if len(segs) != len(imgs):
-        print(f"Mismatch: {len(segs)} segs vs {len(imgs)} images.", file=sys.stderr)
-        return
-    out = Path(output_dir)
-    args = argparse.Namespace(interpolation=interpolation, overwrite=overwrite)
-    pairs = [
-        (s, i, build_output_path(s, out, seg_prefix, seg_suffix))
-        for s, i in zip(segs, imgs)
-        if overwrite or not build_output_path(s, out, seg_prefix, seg_suffix).exists()
-    ]
-    process_map(
-        functools.partial(process_one, args=args),
-        pairs,
-        max_workers=n_jobs,
-        disable=False,
         desc='uroseg transform_seg2image',
     )

@@ -8,7 +8,7 @@ import scipy.ndimage as ndi
 from tqdm.contrib.concurrent import process_map
 
 from uroseg.utils.image import Image, save_nifti_seg
-from uroseg.utils.utils import add_common_args, build_pairs
+from uroseg.utils.utils import add_common_args, build_pairs, build_output_path
 
 # Full 26-connectivity structure for 3-D images
 _STRUCT26 = np.ones((3, 3, 3), dtype=np.int8)
@@ -101,18 +101,50 @@ def keep_largest_component(
     return result
 
 
-def process_one(pair: tuple[Path, Path], args: argparse.Namespace) -> None:
-    input_path, output_path = pair
+def largest_component(
+    input: Path | str,
+    output: Path | str,
+    labels: list[int] | None = None,
+    dilate: int = 0,
+    binarize: bool = False,
+    out_suffix: str = "_largest",
+    out_prefix: str = "",
+    overwrite: bool = False,
+) -> Path:
+    input_path, output_path = Path(input), Path(output)
+    if not output_path.suffix:
+        output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
     img = Image.load(input_path)
-    labels = args.labels if args.labels else None
-    img.data = keep_largest_component(
-        img.data,
-        labels=labels,
-        dilate=args.dilate,
-        binarize=args.binarize,
-    )
+    img.data = keep_largest_component(img.data, labels=labels, dilate=dilate, binarize=binarize)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_seg(img.data, img.affine, img.header, str(output_path))
+    return output_path
+
+
+def largest_component_dir(
+    input_dir: Path | str,
+    output_dir: Path | str,
+    labels: list[int] | None = None,
+    dilate: int = 0,
+    binarize: bool = False,
+    out_suffix: str = "_largest",
+    out_prefix: str = "",
+    overwrite: bool = False,
+    n_jobs: int = 1,
+) -> None:
+    pairs = build_pairs(input_dir, output_dir, out_suffix, out_prefix, overwrite)
+    in_paths = [p[0] for p in pairs]
+    out_paths = [p[1] for p in pairs]
+    process_map(
+        functools.partial(
+            largest_component,
+            labels=labels, dilate=dilate, binarize=binarize, overwrite=overwrite,
+        ),
+        in_paths, out_paths,
+        max_workers=n_jobs,
+        disable=False,
+        desc='uroseg largest_component',
+    )
 
 
 def main() -> None:
@@ -135,59 +167,15 @@ def main() -> None:
     args = parser.parse_args()
 
     pairs = build_pairs(args.seg, args.out, args.out_suffix, args.out_prefix, args.overwrite)
-    process_map(
-        functools.partial(process_one, args=args),
-        pairs,
-        max_workers=args.max_workers,
-        disable=args.quiet,
-        desc='uroseg largest_component',
-    )
-
-
-def largest_component(
-    input: Path | str,
-    output: Path | str,
-    labels: list[int] | None = None,
-    dilate: int = 0,
-    binarize: bool = False,
-    out_suffix: str = "_largest",
-    out_prefix: str = "",
-    overwrite: bool = False,
-) -> Path:
-    import argparse
-    input_path, output_path = Path(input), Path(output)
-    if not output_path.suffix:
-        from uroseg.utils.utils import build_output_path
-        output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    process_one(
-        (input_path, output_path),
-        argparse.Namespace(labels=labels, dilate=dilate, binarize=binarize, overwrite=overwrite),
-    )
-    return output_path
-
-
-def largest_component_dir(
-    input_dir: Path | str,
-    output_dir: Path | str,
-    labels: list[int] | None = None,
-    dilate: int = 0,
-    binarize: bool = False,
-    out_suffix: str = "_largest",
-    out_prefix: str = "",
-    overwrite: bool = False,
-    n_jobs: int = 1,
-) -> None:
-    import argparse, functools
-    from uroseg.utils.utils import build_pairs
-    pairs = build_pairs(input_dir, output_dir, out_suffix, out_prefix, overwrite)
+    in_paths = [p[0] for p in pairs]
+    out_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            process_one,
-            args=argparse.Namespace(labels=labels, dilate=dilate, binarize=binarize, overwrite=overwrite),
+            largest_component,
+            labels=args.labels, dilate=args.dilate, binarize=args.binarize, overwrite=args.overwrite,
         ),
-        pairs,
-        max_workers=n_jobs,
-        disable=False,
+        in_paths, out_paths,
+        max_workers=args.max_workers,
+        disable=args.quiet,
         desc='uroseg largest_component',
     )

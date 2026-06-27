@@ -180,11 +180,9 @@ def test_map_labels_cli(seg_file, map_json, tmp_path):
 # ── resample ──────────────────────────────────────────────────────────────────
 
 def test_resample_changes_spacing(img_file, tmp_path):
-    from uroseg.tools.resample import process_one
-    import argparse
+    from uroseg.tools.resample import resample
     out = tmp_path / 'resampled.nii.gz'
-    args = argparse.Namespace(mm=[2.0, 2.0, 2.0], overwrite=True)
-    process_one((img_file, out), args)
+    resample(img_file, out, mm=[2.0, 2.0, 2.0], overwrite=True)
     assert out.exists()
     img = Image.load(out)
     assert img.data.ndim == 3
@@ -192,11 +190,9 @@ def test_resample_changes_spacing(img_file, tmp_path):
 
 def test_resample_mm_single_value_isotropic(img_file, tmp_path):
     """--mm 1 (single value) resamples isotropically."""
-    from uroseg.tools.resample import process_one
-    import argparse
+    from uroseg.tools.resample import resample
     out = tmp_path / 'resampled_iso.nii.gz'
-    args = argparse.Namespace(mm=[1.0], overwrite=True)
-    process_one((img_file, out), args)
+    resample(img_file, out, mm=1.0, overwrite=True)
     assert out.exists()
     result = Image.load(out)
     assert result.data.ndim == 3
@@ -204,11 +200,9 @@ def test_resample_mm_single_value_isotropic(img_file, tmp_path):
 
 def test_resample_mm_three_values_anisotropic(img_file, tmp_path):
     """--mm 1 0.5 0.5 (three values) resamples anisotropically."""
-    from uroseg.tools.resample import process_one
-    import argparse
+    from uroseg.tools.resample import resample
     out = tmp_path / 'resampled_aniso.nii.gz'
-    args = argparse.Namespace(mm=[1.0, 0.5, 0.5], overwrite=True)
-    process_one((img_file, out), args)
+    resample(img_file, out, mm=[1.0, 0.5, 0.5], overwrite=True)
     assert out.exists()
     result = Image.load(out)
     assert result.data.ndim == 3
@@ -262,11 +256,9 @@ def test_resample_cli(img_file, tmp_path):
 # ── reorient ──────────────────────────────────────────────────────────────────
 
 def test_reorient_produces_output(img_file, tmp_path):
-    from uroseg.tools.reorient import process_one
-    import argparse
+    from uroseg.tools.reorient import reorient
     out = tmp_path / 'reoriented.nii.gz'
-    args = argparse.Namespace(overwrite=True)
-    process_one((img_file, out), args)
+    reorient(img_file, out, overwrite=True)
     assert out.exists()
     img = Image.load(out)
     assert img.data.ndim == 3
