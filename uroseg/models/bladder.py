@@ -17,7 +17,7 @@ NNUNET_TASK = Bladder.nnunet_task
 def main() -> None:
     import argparse
     from uroseg.nnunet.predict import add_inference_args, run_predict_cli
-    parser = argparse.ArgumentParser(prog='uroseg bladder')
+    parser = argparse.ArgumentParser(prog='uroseg bladder', description=Bladder.description)
     add_inference_args(parser)
     args = parser.parse_args()
     run_predict_cli(Bladder(), args)

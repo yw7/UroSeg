@@ -16,8 +16,8 @@ from uroseg.utils.image import Image
 
 
 def add_inference_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('--img', '-i', required=True, help='Input image file or folder')
-    parser.add_argument('--out', '-o', required=True, help='Output folder')
+    parser.add_argument('img', help='Input image file or folder')
+    parser.add_argument('out', nargs='?', default='.', help='Output folder (default: current directory)')
     parser.add_argument('--fold', '-f', type=int, default=0, help='nnU-Net fold (default: 0)')
     parser.add_argument('--device', '-d', default='cuda', choices=['cuda', 'cpu', 'mps'])
     parser.add_argument('--out-suffix', default='_seg', help='Output filename suffix')
@@ -32,7 +32,12 @@ def run_predict_cli(model: SegModel, args) -> None:
     from uroseg.models.base import _find_model_dir
 
     data_path = resolve_data_path(args.data_dir)
-    model_dir = _find_model_dir(model.name, data_path)
+    try:
+        model_dir = _find_model_dir(model.name, data_path)
+    except FileNotFoundError:
+        print(f"Model '{model.name}' not installed — downloading...")
+        model.install(data_path)
+        model_dir = _find_model_dir(model.name, data_path)
 
     inputs = collect_niftis(args.img)
     if not inputs:
