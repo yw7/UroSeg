@@ -5,6 +5,13 @@ from uroseg.models import get_model, list_models
 from uroseg.models.prostate import Prostate
 from uroseg.models.bladder import Bladder
 
+# In-memory data layer
+from uroseg.utils.image import Image
+from uroseg.tools.largest_component import keep_largest_component
+from uroseg.tools.transform_seg2image import resample_seg_to_image
+from uroseg.tools.map_labels import apply_map
+from uroseg.tools.preview import make_preview
+
 # Tools — single file
 from uroseg.tools.map_labels import map_labels
 from uroseg.tools.resample import resample
@@ -32,6 +39,8 @@ except PackageNotFoundError:
 
 __all__ = [
     'get_model', 'list_models', 'Prostate', 'Bladder',
+    'Image',
+    'keep_largest_component', 'resample_seg_to_image', 'apply_map', 'make_preview',
     'map_labels', 'map_labels_dir',
     'resample', 'resample_dir',
     'preview', 'preview_dir',
