@@ -196,20 +196,30 @@ def test_nnunet_predict_image_calls_run_inference(tmp_path):
     np.testing.assert_array_equal(result.data, fake_seg)
 
 
-def test_segmodel_predict_dir_calls_predict(tmp_path):
+def test_segmodel_predict_dir_writes_outputs(tmp_path):
+    import nibabel as nib
+    import numpy as np
+    from unittest.mock import MagicMock, patch
     from uroseg.models.base import SegModel
-    import nibabel as nib, numpy as np
-    f = tmp_path / 'a.nii.gz'
-    nib.save(nib.Nifti1Image(np.zeros((5,5,5), dtype=np.int16), np.eye(4)), f)
+    from uroseg.utils.image import Image
+
+    for name in ('a.nii.gz', 'b.nii.gz'):
+        nib.save(nib.Nifti1Image(np.zeros((5, 5, 5), dtype=np.float32), np.eye(4)),
+                 tmp_path / name)
 
     class M(SegModel):
         name = 'x'; description = ''; weights_url = ''; labels = {}
-        calls = []
-        def predict(self, input, output_dir, **kwargs):
-            M.calls.append(input)
+        def init_predictor(self, model_dir, fold=0, device='cuda'):
+            return MagicMock()
+        def predict_image(self, predictor, img):
+            return Image(data=np.zeros_like(img.data, dtype=np.uint8),
+                         affine=img.affine, header=img.header)
 
-    M().predict_dir(tmp_path, tmp_path / 'out', n_jobs=1)
-    assert len(M.calls) == 1
+    with patch('uroseg.models.base._find_model_dir', return_value=tmp_path), \
+         patch('uroseg.models.base._resolve_data_dir', return_value=tmp_path):
+        M().predict_dir(tmp_path, tmp_path / 'out')
+
+    assert len(list((tmp_path / 'out').glob('*.nii.gz'))) == 2
 
 
 def test_prostate_class_attrs():

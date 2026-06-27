@@ -126,54 +126,6 @@ def _resolve_fold_dir(model_dir: Path, fold: int) -> tuple[Path, str]:
     return trainer_dir, 'checkpoint_best.pth'
 
 
-def run_predict(
-    model_dir: Path,
-    inputs: list[Path],
-    output_dir: Path,
-    fold: int = 0,
-    device: str = 'cuda',
-) -> None:
-    import torch
-    from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if device == 'cuda' and not torch.cuda.is_available():
-        device = 'cpu'
-    elif device == 'mps' and not torch.backends.mps.is_available():
-        device = 'cpu'
-    device_obj = torch.device(device)
-
-    predictor = nnUNetPredictor(
-        tile_step_size=0.5,
-        use_gaussian=True,
-        use_mirroring=True,
-        perform_everything_on_device=True,
-        device=device_obj,
-        verbose=False,
-        verbose_preprocessing=False,
-        allow_tqdm=True,
-    )
-
-    fold_dir, checkpoint_name = _resolve_fold_dir(model_dir, fold)
-
-    predictor.initialize_from_trained_model_folder(
-        str(fold_dir),
-        use_folds=(fold,),
-        checkpoint_name=checkpoint_name,
-    )
-
-    list_of_lists = [[str(f)] for f in inputs]
-    output_names = [str(output_dir / f.name) for f in inputs]
-    predictor.predict_from_files(
-        list_of_lists,
-        output_names,
-        save_probabilities=False,
-        overwrite=True,
-        num_processes_preprocessing=2,
-        num_processes_segmentation_export=2,
-    )
-
 
 def run_predict_array(
     model_dir: Path,

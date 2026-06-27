@@ -17,9 +17,4 @@ NNUNET_TASK = Prostate.nnunet_task
 
 
 def main() -> None:
-    import argparse
-    from uroseg.nnunet.predict import add_inference_args, run_predict_cli
-    parser = argparse.ArgumentParser(prog='uroseg prostate', description=Prostate.description)
-    add_inference_args(parser)
-    args = parser.parse_args()
-    run_predict_cli(Prostate(), args)
+    Prostate.cli_main()

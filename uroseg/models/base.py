@@ -1,8 +1,9 @@
 from __future__ import annotations
+import argparse
+import sys
 import tempfile
 import urllib.request
 import zipfile
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from tqdm import tqdm
@@ -17,7 +18,6 @@ def _extract_release_id(url: str) -> str:
 
 
 def _download_zip(url: str, tmp_dir: Path) -> Path:
-    import sys
     zip_name = url.split('/')[-1]
     zip_path = tmp_dir / zip_name
     with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
@@ -67,6 +67,21 @@ def _resolve_data_dir() -> Path:
     return resolve_data_path()
 
 
+def add_inference_args(parser: argparse.ArgumentParser) -> None:
+    """Add standard inference args to a parser (used by each model's CLI)."""
+    from uroseg.utils.utils import add_common_args, data_dir_help
+    parser.add_argument('img', help='Input image file or folder')
+    parser.add_argument('out', nargs='?', default='.', help='Output folder (default: current directory)')
+    parser.add_argument('--fold', '-f', type=int, default=0, help='nnU-Net fold (default: 0)')
+    parser.add_argument('--device', '-d', default='cuda', choices=['cuda', 'cpu', 'mps'])
+    parser.add_argument('--iso', action='store_true', default=False,
+                        help='Leave output in 1mm canonical space (default: resample back to input)')
+    parser.add_argument('--out-suffix', default='_seg', help='Output filename suffix')
+    parser.add_argument('--out-prefix', default='', help='Output filename prefix')
+    parser.add_argument('--data-dir', default=None, help=data_dir_help())
+    add_common_args(parser)
+
+
 class SegModel:
     name: str
     description: str
@@ -93,12 +108,12 @@ class SegModel:
         raise NotImplementedError(f"{self.__class__.__name__} does not implement init_predictor()")
 
     def predict_image(self, predictor, img: Image) -> Image:
-        """Run inference on img (canonical 1mm, already preprocessed). Return seg in model space."""
+        """Pure inference on img (canonical 1mm). Returns seg in model space."""
         raise NotImplementedError(f"{self.__class__.__name__} does not implement predict_image()")
 
     def predict(self, input: Path | str, output_dir: Path | str,
                 fold: int = 0, device: str = 'cuda', iso: bool = False) -> Path:
-        """Load → canonical+1mm → init_predictor → predict_image → post-process → save."""
+        """Single-file Python API: load → canonical+1mm → infer → post-process → save."""
         input_path = Path(input)
         img_orig = Image.load(input_path)
         img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
@@ -116,19 +131,63 @@ class SegModel:
         return out_path
 
     def predict_dir(self, input_dir: Path, output_dir: Path,
-                    n_jobs: int = 1, **kwargs) -> None:
+                    fold: int = 0, device: str = 'cuda', iso: bool = False) -> None:
+        """Batch Python API: predict all NIfTIs in a directory, predictor init once."""
         from uroseg.utils.utils import collect_niftis
-        inputs = collect_niftis(input_dir)
+        inputs = collect_niftis(Path(input_dir))
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        if n_jobs == 1:
-            for inp in inputs:
-                self.predict(inp, output_dir, **kwargs)
-        else:
-            with ProcessPoolExecutor(max_workers=n_jobs) as ex:
-                futures = [ex.submit(self.predict, inp, output_dir, **kwargs) for inp in inputs]
-                for f in futures:
-                    f.result()
+        model_dir = _find_model_dir(self.name, _resolve_data_dir())
+        predictor = self.init_predictor(model_dir, fold=fold, device=device)
+        for inp in inputs:
+            img_orig = Image.load(inp)
+            img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
+            seg = self.predict_image(predictor, img_1mm)
+            if self.post_largest_component:
+                seg.data = keep_largest_component(seg.data, binarize=True)
+            if not iso:
+                seg = resample_seg_to_image(seg, img_orig)
+            save_nifti_seg(seg.data, seg.affine, seg.header, str(output_dir / inp.name))
+
+    def predict_cli(self, args) -> None:
+        """CLI batch prediction: auto-install, tqdm progress, predictor init once."""
+        from uroseg.utils.utils import collect_niftis, build_output_path, resolve_data_path
+        data_path = resolve_data_path(args.data_dir)
+        try:
+            model_dir = _find_model_dir(self.name, data_path)
+        except FileNotFoundError:
+            print(f"Model '{self.name}' not installed — downloading...")
+            self.install(data_path)
+            model_dir = _find_model_dir(self.name, data_path)
+        inputs = collect_niftis(args.img)
+        if not inputs:
+            print(f"No NIfTI files found in {args.img}", file=sys.stderr)
+            sys.exit(1)
+        out_dir = Path(args.out)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        predictor = self.init_predictor(model_dir, fold=args.fold, device=args.device)
+        for inp in tqdm(inputs, desc=f'uroseg {self.name}', disable=args.quiet):
+            dest = build_output_path(inp, out_dir, args.out_prefix, args.out_suffix)
+            if not args.overwrite and dest.exists():
+                continue
+            img_orig = Image.load(inp)
+            img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
+            seg = self.predict_image(predictor, img_1mm)
+            if self.post_largest_component:
+                seg.data = keep_largest_component(seg.data, binarize=True)
+            if not args.iso:
+                seg = resample_seg_to_image(seg, img_orig)
+            save_nifti_seg(seg.data, seg.affine, seg.header, str(dest))
+        if not args.quiet:
+            print(f"Segmentations saved to {out_dir}")
+
+    @classmethod
+    def cli_main(cls) -> None:
+        """Entry point for each model's CLI. Call as `MyModel.cli_main()` from main()."""
+        parser = argparse.ArgumentParser(prog=f'uroseg {cls.name}', description=cls.description)
+        add_inference_args(parser)
+        args = parser.parse_args()
+        cls().predict_cli(args)
 
 
 class NNUNetSegModel(SegModel):
