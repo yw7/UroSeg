@@ -108,7 +108,6 @@ def run_predict_array(
 ) -> Image:
     """Run nnunet inference on an in-memory Image. Returns seg Image in same space as input."""
     import numpy as np
-    import nibabel as nib
     import torch
     from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
@@ -136,8 +135,7 @@ def run_predict_array(
         checkpoint_name='checkpoint_best.pth',
     )
 
-    nib_img = nib.Nifti1Image(img.data, img.affine, img.header)
-    spacing = [float(s) for s in nib_img.header.get_zooms()[:3]]
+    spacing = [float(s) for s in img.header.get_zooms()[:3]]
 
     input_array = img.data[np.newaxis].astype(np.float32)  # (1, x, y, z)
     seg_array = predictor.predict_single_npy_array(

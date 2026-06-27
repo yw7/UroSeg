@@ -115,7 +115,7 @@ class NNUNetSegModel(SegModel):
     nnunet_task: str
 
     def predict_image(self, img: Image,
-                      fold: int = 0, device: str = 'cuda') -> Image:
+                      fold: int = 0, device: str = 'cuda', **kwargs) -> Image:
         """Reorient → 1 mm iso → nnunet → largest_component. Returns seg in 1 mm canonical space."""
         from uroseg.nnunet.helpers import run_predict_array
         img_canon = img.as_canonical()
