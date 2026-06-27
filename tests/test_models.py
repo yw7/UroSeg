@@ -1,45 +1,70 @@
-from dataclasses import fields
-from uroseg.models import ModelDef
-import uroseg.resources.models.prostate as prostate_mod
-import uroseg.resources.models.bladder as bladder_mod
+from __future__ import annotations
+import pytest
+from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 
-def test_modeldef_has_four_fields():
-    names = {f.name for f in fields(ModelDef)}
-    assert names == {'name', 'description', 'weights_url', 'labels'}
+def test_extract_release_id():
+    from uroseg.models.base import _extract_release_id
+    url = 'https://github.com/x/releases/download/r20260101/X.zip'
+    assert _extract_release_id(url) == 'r20260101'
 
 
-def test_modeldef_is_dataclass():
-    m = ModelDef(name='x', description='d', weights_url='u', labels={})
-    assert m.name == 'x'
-    assert m.description == 'd'
-    assert m.weights_url == 'u'
-    assert m.labels == {}
+def test_find_model_dir_newest_first(tmp_path):
+    from uroseg.models.base import _find_model_dir
+    (tmp_path / 'prostate' / 'r20260101').mkdir(parents=True)
+    (tmp_path / 'prostate' / 'r20260201').mkdir(parents=True)
+    result = _find_model_dir('prostate', tmp_path)
+    assert result.name == 'r20260201'
 
 
-def test_prostate_model_attributes():
-    assert isinstance(prostate_mod.MODEL, ModelDef)
-    assert prostate_mod.MODEL.name == 'prostate'
-    assert isinstance(prostate_mod.NNUNET_TASK, str)
-    assert callable(prostate_mod.main)
+def test_find_model_dir_not_found(tmp_path):
+    from uroseg.models.base import _find_model_dir
+    with pytest.raises(FileNotFoundError):
+        _find_model_dir('nonexistent', tmp_path)
 
 
-def test_bladder_model_attributes():
-    assert isinstance(bladder_mod.MODEL, ModelDef)
-    assert bladder_mod.MODEL.name == 'bladder'
-    assert isinstance(bladder_mod.NNUNET_TASK, str)
-    assert callable(bladder_mod.main)
+def test_segmodel_install_skips_when_no_url(tmp_path, capsys):
+    from uroseg.models.base import SegModel
+    class EmptyModel(SegModel):
+        name = 'test'; description = 'd'; weights_url = ''; labels = {}
+    EmptyModel().install(tmp_path)
+    assert 'skip' in capsys.readouterr().out.lower()
 
 
-def test_prostate_labels_have_background():
-    assert 'background' in prostate_mod.MODEL.labels
-    assert isinstance(prostate_mod.MODEL.labels['prostate'], list)
+def test_segmodel_install_skips_when_already_installed(tmp_path, capsys):
+    from uroseg.models.base import SegModel
+    class M(SegModel):
+        name = 'x'; description = ''; weights_url = 'https://h/releases/download/r1/x.zip'; labels = {}
+    (tmp_path / 'x' / 'r1').mkdir(parents=True)
+    M().install(tmp_path)
+    assert 'already installed' in capsys.readouterr().out.lower()
 
 
-def test_bladder_labels_have_background():
-    assert 'background' in bladder_mod.MODEL.labels
-    assert isinstance(bladder_mod.MODEL.labels['bladder'], int)
+def test_nnunet_segmodel_is_segmodel():
+    from uroseg.models.base import SegModel, NNUNetSegModel
+    assert issubclass(NNUNetSegModel, SegModel)
 
 
-def test_prostate_main_is_callable():
-    assert callable(prostate_mod.main)
+def test_segmodel_predict_raises():
+    from uroseg.models.base import SegModel
+    class M(SegModel):
+        name = 'x'; description = ''; weights_url = ''; labels = {}
+    with pytest.raises(NotImplementedError):
+        M().predict(Path('x.nii.gz'), Path('/tmp'))
+
+
+def test_segmodel_predict_dir_calls_predict(tmp_path):
+    from uroseg.models.base import SegModel
+    import nibabel as nib, numpy as np
+    f = tmp_path / 'a.nii.gz'
+    nib.save(nib.Nifti1Image(np.zeros((5,5,5), dtype=np.int16), np.eye(4)), f)
+
+    class M(SegModel):
+        name = 'x'; description = ''; weights_url = ''; labels = {}
+        calls = []
+        def predict(self, input, output_dir, **kwargs):
+            M.calls.append(input)
+
+    M().predict_dir(tmp_path, tmp_path / 'out', n_jobs=1)
+    assert len(M.calls) == 1
