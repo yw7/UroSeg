@@ -1,9 +1,10 @@
 from __future__ import annotations
 import argparse
 import sys
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from tqdm import tqdm
 
 if TYPE_CHECKING:
     from uroseg.models.base import SegModel
@@ -20,16 +21,20 @@ def add_inference_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('out', nargs='?', default='.', help='Output folder (default: current directory)')
     parser.add_argument('--fold', '-f', type=int, default=0, help='nnU-Net fold (default: 0)')
     parser.add_argument('--device', '-d', default='cuda', choices=['cuda', 'cpu', 'mps'])
+    parser.add_argument('--iso', action='store_true', default=False,
+                        help='Leave output in 1mm canonical space (default: resample back to input)')
     parser.add_argument('--out-suffix', default='_seg', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
     parser.add_argument('--data-dir', default=None, help=data_dir_help())
     add_common_args(parser)
 
 
-def run_predict_cli(model: SegModel, args, largest_component: bool = False) -> None:
-    """Orchestrate the full inference workflow for a given model."""
-    from uroseg.nnunet.helpers import run_predict
+def run_predict_cli(model: SegModel, args) -> None:
+    """Generic in-memory prediction loop: no tmp dir, single IO per image."""
     from uroseg.models.base import _find_model_dir
+    from uroseg.tools.largest_component import keep_largest_component
+    from uroseg.tools.transform_seg2image import resample_seg_to_image
+    from uroseg.utils.image import save_nifti_seg
 
     data_path = resolve_data_path(args.data_dir)
     try:
@@ -47,43 +52,20 @@ def run_predict_cli(model: SegModel, args, largest_component: bool = False) -> N
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_in = Path(tmp) / 'inputs'
-        tmp_out = Path(tmp) / 'outputs'
-        tmp_in.mkdir()
-        tmp_out.mkdir()
+    predictor = model.init_predictor(model_dir, fold=args.fold, device=args.device)
 
-        if not args.quiet:
-            print(f"Reorienting {len(inputs)} image(s) to RAS...")
-        reoriented = []
-        for i, p in enumerate(inputs):
-            img = Image.load(p)
-            img = img.reorient('RAS')
-            out_p = tmp_in / f"{i:04d}_{p.name}"
-            img.save(out_p)
-            reoriented.append(out_p)
-
-        run_predict(
-            model_dir=model_dir,
-            inputs=reoriented,
-            output_dir=tmp_out,
-            fold=args.fold,
-            device=args.device,
-        )
-
-        for inp, pred_file in zip(inputs, sorted(tmp_out.glob('*.nii.gz'))):
-            dest = build_output_path(inp, out_dir, args.out_prefix, args.out_suffix)
-            if not args.overwrite and dest.exists():
-                continue
-            img = Image.load(pred_file)
-            if largest_component:
-                from uroseg.tools.largest_component import keep_largest_component
-                img = Image(
-                    data=keep_largest_component(img.data, binarize=True),
-                    affine=img.affine,
-                    header=img.header,
-                )
-            img.save(dest)
+    for inp in tqdm(inputs, desc=f'uroseg {model.name}', disable=args.quiet):
+        dest = build_output_path(inp, out_dir, args.out_prefix, args.out_suffix)
+        if not args.overwrite and dest.exists():
+            continue
+        img_orig = Image.load(inp)
+        img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
+        seg = model.predict_image(predictor, img_1mm)
+        if model.post_largest_component:
+            seg.data = keep_largest_component(seg.data, binarize=True)
+        if not args.iso:
+            seg = resample_seg_to_image(seg, img_orig)
+        save_nifti_seg(seg.data, seg.affine, seg.header, str(dest))
 
     if not args.quiet:
         print(f"Segmentations saved to {out_dir}")
