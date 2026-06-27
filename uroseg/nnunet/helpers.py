@@ -49,6 +49,16 @@ def generate_dataset_json(model: SegModel, images_tr: Path) -> dict:
     return dataset
 
 
+def _resolve_fold_dir(model_dir: Path, fold: int) -> tuple[Path, str]:
+    """Return (trainer_dir, checkpoint_name) for the given fold."""
+    fold_matches = sorted(model_dir.glob(f'**/fold_{fold}'))
+    trainer_dir = fold_matches[0].parent if fold_matches else model_dir
+    for name in ('checkpoint_best.pth', 'checkpoint_final.pth'):
+        if (trainer_dir / f'fold_{fold}' / name).exists():
+            return trainer_dir, name
+    return trainer_dir, 'checkpoint_best.pth'
+
+
 def run_predict(
     model_dir: Path,
     inputs: list[Path],
@@ -78,14 +88,12 @@ def run_predict(
         allow_tqdm=True,
     )
 
-    # Find the trainer dir that contains fold_N (handles 1 or 2 levels of nesting)
-    fold_matches = sorted(model_dir.glob(f'**/fold_{fold}'))
-    fold_dir = fold_matches[0].parent if fold_matches else model_dir
+    fold_dir, checkpoint_name = _resolve_fold_dir(model_dir, fold)
 
     predictor.initialize_from_trained_model_folder(
         str(fold_dir),
         use_folds=(fold,),
-        checkpoint_name='checkpoint_best.pth',
+        checkpoint_name=checkpoint_name,
     )
 
     list_of_lists = [[str(f)] for f in inputs]
@@ -127,12 +135,11 @@ def run_predict_array(
         allow_tqdm=True,
     )
 
-    fold_matches = sorted(model_dir.glob(f'**/fold_{fold}'))
-    fold_dir = fold_matches[0].parent if fold_matches else model_dir
+    fold_dir, checkpoint_name = _resolve_fold_dir(model_dir, fold)
     predictor.initialize_from_trained_model_folder(
         str(fold_dir),
         use_folds=(fold,),
-        checkpoint_name='checkpoint_best.pth',
+        checkpoint_name=checkpoint_name,
     )
 
     spacing = [float(s) for s in img.header.get_zooms()[:3]]
