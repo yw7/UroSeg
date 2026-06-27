@@ -78,11 +78,14 @@ def _init_predictor(model_dir: Path, fold: int = 0, device: str = 'cuda'):
 def _run_inference(predictor, img: Image) -> 'np.ndarray':
     """Run predict_single_npy_array on img (already 1mm canonical). Suppresses output."""
     import numpy as np
-    spacing = [float(s) for s in img.header.get_zooms()[:3]]
-    input_array = img.data[np.newaxis].astype(np.float32)
+    spacing = tuple(float(s) for s in img.header.get_zooms()[:3])
+    # nnunet (SimpleITK) expects [C, z, y, x]; nibabel canonical is [x, y, z] — transpose
+    data = np.ascontiguousarray(np.transpose(img.data, (2, 1, 0)))
+    input_array = data[np.newaxis].astype(np.float32)
     with _suppress_nnunet():
         seg_array = predictor.predict_single_npy_array(input_array, {'spacing': spacing})
-    return seg_array
+    # transpose result back from [z, y, x] to nibabel [x, y, z]
+    return np.ascontiguousarray(np.transpose(seg_array, (2, 1, 0)))
 
 
 def extract_dataset_id(nnunet_task: str) -> int:

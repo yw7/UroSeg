@@ -308,10 +308,10 @@ def test_run_predict_array_returns_image(tmp_path):
     np.testing.assert_array_equal(result.data, fake_seg)
     np.testing.assert_array_equal(result.affine, img.affine)
 
-    # Verify predict_single_npy_array was called with correct shape and spacing
+    # Verify predict_single_npy_array was called with (1, z, y, x) and spacing tuple
     call_args = mock_predictor.predict_single_npy_array.call_args
-    assert call_args[0][0].shape == (1, 10, 10, 10)   # (1, x, y, z)
-    assert call_args[0][1]['spacing'] == [1.0, 1.0, 1.0]
+    assert call_args[0][0].shape == (1, 10, 10, 10)   # (1, z, y, x)
+    assert call_args[0][1]['spacing'] == (1.0, 1.0, 1.0)
 
 
 def test_suppress_nnunet_silences_print(capsys):
@@ -377,7 +377,7 @@ def test_init_predictor_initializes_from_folder(tmp_path):
 
 
 def test_run_inference_calls_predict_single(tmp_path):
-    """_run_inference passes (1,x,y,z) array and spacing; returns seg array."""
+    """_run_inference passes (1,z,y,x) array to nnunet; returns seg in nibabel [x,y,z] shape."""
     import numpy as np
     import nibabel as nib
     from unittest.mock import MagicMock
@@ -386,14 +386,16 @@ def test_run_inference_calls_predict_single(tmp_path):
 
     data = np.ones((8, 8, 8), dtype=np.float32)
     img = Image(data=data, affine=np.eye(4), header=nib.Nifti1Image(data, np.eye(4)).header)
-    expected = np.zeros((8, 8, 8), dtype=np.uint8)
+    # mock returns [z, y, x] as nnunet would
+    mock_seg = np.zeros((8, 8, 8), dtype=np.uint8)
 
     mock_predictor = MagicMock()
-    mock_predictor.predict_single_npy_array.return_value = expected
+    mock_predictor.predict_single_npy_array.return_value = mock_seg
 
     result = _run_inference(mock_predictor, img)
 
-    assert result is expected
     call_args = mock_predictor.predict_single_npy_array.call_args
-    assert call_args[0][0].shape == (1, 8, 8, 8)   # (1, x, y, z)
-    assert call_args[0][1]['spacing'] == [1.0, 1.0, 1.0]
+    assert call_args[0][0].shape == (1, 8, 8, 8)      # (1, z, y, x)
+    assert call_args[0][1]['spacing'] == (1.0, 1.0, 1.0)
+    assert result.shape == (8, 8, 8)                   # transposed back to [x, y, z]
+    np.testing.assert_array_equal(result, mock_seg)    # isotropic: transpose is identity
