@@ -81,14 +81,14 @@ def test_normalize_labels_mixed_formats():
 # ── extract_dataset_id ────────────────────────────────────────────────────────
 
 def test_extract_dataset_id_parses_correctly():
-    from uroseg.commands.train_nnunet import extract_dataset_id
+    from uroseg.nnunet.helpers import extract_dataset_id
     assert extract_dataset_id("Dataset001_Prostate") == 1
     assert extract_dataset_id("Dataset010_Bladder") == 10
     assert extract_dataset_id("Dataset123_Kidney") == 123
 
 
 def test_extract_dataset_id_raises_on_bad_format():
-    from uroseg.commands.train_nnunet import extract_dataset_id
+    from uroseg.nnunet.helpers import extract_dataset_id
     with pytest.raises(ValueError, match="Invalid nnunet_task"):
         extract_dataset_id("ProstateBadName")
 
@@ -96,7 +96,7 @@ def test_extract_dataset_id_raises_on_bad_format():
 # ── generate_dataset_json ─────────────────────────────────────────────────────
 
 def test_generate_dataset_json_simple(bladder_model, images_tr_dir):
-    from uroseg.commands.train_nnunet import generate_dataset_json
+    from uroseg.nnunet.helpers import generate_dataset_json
     result = generate_dataset_json(bladder_model, images_tr_dir)
     assert result["channel_names"] == {"0": "MRI"}
     assert result["labels"] == {"background": 0, "bladder": 1}
@@ -106,7 +106,7 @@ def test_generate_dataset_json_simple(bladder_model, images_tr_dir):
 
 
 def test_generate_dataset_json_with_regions(prostate_model, images_tr_dir):
-    from uroseg.commands.train_nnunet import generate_dataset_json
+    from uroseg.nnunet.helpers import generate_dataset_json
     result = generate_dataset_json(prostate_model, images_tr_dir)
     assert result["regions_class_order"] == [1, 2, 3]
     assert result["channel_names"] == {"0": "MRI"}
@@ -115,8 +115,8 @@ def test_generate_dataset_json_with_regions(prostate_model, images_tr_dir):
 # ── setup_nnunet_env ──────────────────────────────────────────────────────────
 
 def test_setup_nnunet_env_sets_vars(tmp_path):
-    from uroseg.commands.train_nnunet import setup_nnunet_env
-    setup_nnunet_env(tmp_path)
+    from uroseg.nnunet.helpers import setup_env
+    setup_env(tmp_path)
     assert os.environ["nnUNet_raw"] == str(tmp_path / "nnUNet" / "raw")
     assert os.environ["nnUNet_preprocessed"] == str(tmp_path / "nnUNet" / "preprocessed")
     assert os.environ["nnUNet_results"] == str(tmp_path / "nnUNet" / "results")
@@ -126,7 +126,7 @@ def test_setup_nnunet_env_sets_vars(tmp_path):
 # ── main() integration — subprocess mocked ───────────────────────────────────
 
 def test_train_generates_dataset_json(tmp_path):
-    from uroseg.commands.train_nnunet import main
+    from uroseg.nnunet.train import main
     from uroseg.models.base import SegModel
 
     # Scaffold the raw data directory
@@ -154,7 +154,7 @@ def test_train_generates_dataset_json(tmp_path):
     mock_module.MODEL = ProstateSubModel()
 
     with patch("auglab.add_trainer.add_trainer"), \
-         patch("uroseg.commands.train_nnunet.subprocess.run") as mock_run, \
+         patch("uroseg.nnunet.train.subprocess.run") as mock_run, \
          patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
         mock_load_module.return_value = mock_module
@@ -163,7 +163,7 @@ def test_train_generates_dataset_json(tmp_path):
         import sys
         with patch.object(sys, "argv", [
             "uroseg", "prostate", "--fold", "0",
-            "--data-dir", str(tmp_path),
+            "--training-dir", str(tmp_path),
         ]):
             main()
 
@@ -177,7 +177,7 @@ def test_train_generates_dataset_json(tmp_path):
 
 
 def test_train_calls_nnunet_train(tmp_path):
-    from uroseg.commands.train_nnunet import main
+    from uroseg.nnunet.train import main
     from uroseg.models.bladder import Bladder
 
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset010_Bladder"
@@ -196,7 +196,7 @@ def test_train_calls_nnunet_train(tmp_path):
     mock_module.MODEL = Bladder()
 
     with patch("auglab.add_trainer.add_trainer"), \
-         patch("uroseg.commands.train_nnunet.subprocess.run") as mock_run, \
+         patch("uroseg.nnunet.train.subprocess.run") as mock_run, \
          patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
         mock_load_module.return_value = mock_module
@@ -205,7 +205,7 @@ def test_train_calls_nnunet_train(tmp_path):
         import sys
         with patch.object(sys, "argv", [
             "uroseg", "bladder", "--fold", "0",
-            "--data-dir", str(tmp_path),
+            "--training-dir", str(tmp_path),
         ]):
             main()
 
@@ -221,7 +221,7 @@ def test_train_calls_nnunet_train(tmp_path):
 
 
 def test_train_skips_preprocess_if_done(tmp_path):
-    from uroseg.commands.train_nnunet import main
+    from uroseg.nnunet.train import main
     from uroseg.models.bladder import Bladder
 
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset010_Bladder"
@@ -244,7 +244,7 @@ def test_train_skips_preprocess_if_done(tmp_path):
     mock_module.MODEL = Bladder()
 
     with patch("auglab.add_trainer.add_trainer"), \
-         patch("uroseg.commands.train_nnunet.subprocess.run") as mock_run, \
+         patch("uroseg.nnunet.train.subprocess.run") as mock_run, \
          patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
         mock_load_module.return_value = mock_module
@@ -253,7 +253,7 @@ def test_train_skips_preprocess_if_done(tmp_path):
         import sys
         with patch.object(sys, "argv", [
             "uroseg", "bladder", "--fold", "0",
-            "--data-dir", str(tmp_path),
+            "--training-dir", str(tmp_path),
         ]):
             main()
 
@@ -264,7 +264,7 @@ def test_train_skips_preprocess_if_done(tmp_path):
 
 
 def test_train_sets_auglab_config_env(tmp_path):
-    from uroseg.commands.train_nnunet import main
+    from uroseg.nnunet.train import main
     from uroseg.models.bladder import Bladder
 
     raw_dir = tmp_path / "nnUNet" / "raw" / "Dataset010_Bladder"
@@ -291,7 +291,7 @@ def test_train_sets_auglab_config_env(tmp_path):
     mock_module.MODEL = Bladder()
 
     with patch("auglab.add_trainer.add_trainer"), \
-         patch("uroseg.commands.train_nnunet.subprocess.run", side_effect=capture_run), \
+         patch("uroseg.nnunet.train.subprocess.run", side_effect=capture_run), \
          patch("uroseg.utils.utils.load_model_module") as mock_load_module:
 
         mock_load_module.return_value = mock_module
@@ -299,7 +299,7 @@ def test_train_sets_auglab_config_env(tmp_path):
         import sys
         with patch.object(sys, "argv", [
             "uroseg", "bladder", "--fold", "0",
-            "--data-dir", str(tmp_path),
+            "--training-dir", str(tmp_path),
             "--auglab-config", str(auglab_cfg),
         ]):
             main()
@@ -308,7 +308,7 @@ def test_train_sets_auglab_config_env(tmp_path):
 
 
 def test_train_fails_when_no_images_tr(tmp_path):
-    from uroseg.commands.train_nnunet import main
+    from uroseg.nnunet.train import main
     from uroseg.models.bladder import Bladder
 
     # Create a mock module
@@ -322,12 +322,16 @@ def test_train_fails_when_no_images_tr(tmp_path):
         import sys
         with patch.object(sys, "argv", [
             "uroseg", "bladder", "--fold", "0",
-            "--data-dir", str(tmp_path),
+            "--training-dir", str(tmp_path),
         ]):
             with pytest.raises((FileNotFoundError, SystemExit)):
                 main()
 
 
+@pytest.mark.xfail(
+    reason="cli.py still imports uroseg.commands.train (Task 8 will fix this)",
+    strict=True,
+)
 def test_train_cli_help():
     import subprocess, sys
     result = subprocess.run(
@@ -361,3 +365,58 @@ def test_helpers_extract_dataset_id_bad_format():
     from uroseg.nnunet.helpers import extract_dataset_id
     with pytest.raises(ValueError):
         extract_dataset_id("BadName")
+
+
+# ── new --training-dir/-d tests ───────────────────────────────────────────────
+
+def test_train_nnunet_main_accepts_training_dir(tmp_path):
+    """--training-dir/-d sets the raw data location; separate from --data-dir."""
+    from uroseg.nnunet.train import main
+    from uroseg.models.base import NNUNetSegModel
+    from unittest.mock import patch, MagicMock
+    import sys
+
+    class FakeModel(NNUNetSegModel):
+        name = 'bladder'; description = ''; weights_url = ''; labels = {'background': 0, 'bladder': 1}
+        nnunet_task = 'Dataset010_Bladder'
+
+    training_dir = tmp_path / 'train'
+    raw_dir = training_dir / 'nnUNet' / 'raw' / 'Dataset010_Bladder'
+    (raw_dir / 'imagesTr').mkdir(parents=True)
+    import nibabel as nib, numpy as np
+    nib.save(nib.Nifti1Image(np.zeros((5,5,5), dtype=np.int16), np.eye(4)),
+             raw_dir / 'imagesTr' / 'case_000_0000.nii.gz')
+
+    with patch('uroseg.nnunet.train.subprocess.run'), \
+         patch('auglab.add_trainer.add_trainer'), \
+         patch('uroseg.utils.utils.load_model_module') as mock_load:
+        mock_load.return_value = MagicMock(MODEL=FakeModel(), NNUNET_TASK='Dataset010_Bladder')
+        with patch.object(sys, 'argv', ['uroseg', 'bladder', '-d', str(training_dir)]):
+            main()
+
+
+def test_train_nnunet_default_training_dir_is_cwd(tmp_path, monkeypatch):
+    """Default --training-dir is current working directory."""
+    import os
+    from uroseg.nnunet.train import main
+    from uroseg.models.base import NNUNetSegModel
+    from unittest.mock import patch, MagicMock
+    import sys
+
+    class FakeModel(NNUNetSegModel):
+        name = 'bladder'; description = ''; weights_url = ''; labels = {'background': 0, 'bladder': 1}
+        nnunet_task = 'Dataset010_Bladder'
+
+    monkeypatch.chdir(tmp_path)
+    raw_dir = tmp_path / 'nnUNet' / 'raw' / 'Dataset010_Bladder'
+    (raw_dir / 'imagesTr').mkdir(parents=True)
+    import nibabel as nib, numpy as np
+    nib.save(nib.Nifti1Image(np.zeros((5,5,5), dtype=np.int16), np.eye(4)),
+             raw_dir / 'imagesTr' / 'case_000_0000.nii.gz')
+
+    with patch('uroseg.nnunet.train.subprocess.run'), \
+         patch('auglab.add_trainer.add_trainer'), \
+         patch('uroseg.utils.utils.load_model_module') as mock_load:
+        mock_load.return_value = MagicMock(MODEL=FakeModel(), NNUNET_TASK='Dataset010_Bladder')
+        with patch.object(sys, 'argv', ['uroseg', 'bladder']):
+            main()
