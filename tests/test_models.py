@@ -116,3 +116,47 @@ def test_compat_model_attr():
     from uroseg.models.prostate import MODEL, NNUNET_TASK
     assert MODEL.name == 'prostate'
     assert NNUNET_TASK == 'Dataset101_Prostate'
+
+
+def test_run_predict_array_returns_image(tmp_path):
+    """run_predict_array calls predict_single_npy_array and returns Image in same space."""
+    import sys
+    import numpy as np
+    import nibabel as nib
+    from uroseg.utils.image import Image
+    from uroseg.nnunet.helpers import run_predict_array
+
+    # Build a fake model_dir with fold_0 subdir so glob finds it
+    fold_dir = tmp_path / 'trainer' / 'fold_0'
+    fold_dir.mkdir(parents=True)
+
+    data = np.ones((10, 10, 10), dtype=np.float32)
+    affine = np.eye(4)
+    img = Image(data=data, affine=affine, header=nib.Nifti1Image(data, affine).header)
+
+    fake_seg = np.zeros((10, 10, 10), dtype=np.uint8)
+    fake_seg[3:7, 3:7, 3:7] = 1
+
+    mock_predictor = MagicMock()
+    mock_predictor.predict_single_npy_array.return_value = fake_seg
+
+    # Create mock for nnunetv2 module hierarchy
+    mock_nnunetv2 = MagicMock()
+    mock_nnunetv2.inference.predict_from_raw_data.nnUNetPredictor = MagicMock(return_value=mock_predictor)
+
+    with patch.dict(sys.modules, {
+        'nnunetv2': mock_nnunetv2,
+        'nnunetv2.inference': mock_nnunetv2.inference,
+        'nnunetv2.inference.predict_from_raw_data': mock_nnunetv2.inference.predict_from_raw_data,
+    }):
+        result = run_predict_array(tmp_path, img, fold=0, device='cpu')
+
+    assert isinstance(result, Image)
+    assert result.data.shape == (10, 10, 10)
+    np.testing.assert_array_equal(result.data, fake_seg)
+    np.testing.assert_array_equal(result.affine, img.affine)
+
+    # Verify predict_single_npy_array was called with correct shape and spacing
+    call_args = mock_predictor.predict_single_npy_array.call_args
+    assert call_args[0][0].shape == (1, 10, 10, 10)   # (1, x, y, z)
+    assert call_args[0][1]['spacing'] == [1.0, 1.0, 1.0]
