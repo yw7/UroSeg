@@ -1,0 +1,9 @@
+{
+  "features": {
+    "ghcr.io/rocker-org/devcontainer-features/miniforge:2": {
+      "version": "2.0.2",
+      "resolved": "ghcr.io/rocker-org/devcontainer-features/miniforge@sha256:701930afdec32ecf39648434299a80f3ebf8dfacef5d96c2fb4019c40bb4d879",
+      "integrity": "sha256:701930afdec32ecf39648434299a80f3ebf8dfacef5d96c2fb4019c40bb4d879"
+    }
+  }
+}
