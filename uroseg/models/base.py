@@ -17,6 +17,7 @@ def _extract_release_id(url: str) -> str:
 
 
 def _download_zip(url: str, tmp_dir: Path) -> Path:
+    import sys
     zip_name = url.split('/')[-1]
     zip_path = tmp_dir / zip_name
     with tqdm(unit='B', unit_scale=True, unit_divisor=1024, desc=zip_name) as bar:
@@ -24,7 +25,17 @@ def _download_zip(url: str, tmp_dir: Path) -> Path:
             if total_size > 0:
                 bar.total = total_size
             bar.update(block_size)
-        urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
+        try:
+            urllib.request.urlretrieve(url, zip_path, reporthook=reporthook)
+        except urllib.error.HTTPError as e:
+            print(f"\nDownload failed: HTTP {e.code} {e.reason}\n  URL: {url}", file=sys.stderr)
+            sys.exit(1)
+        except urllib.error.URLError as e:
+            print(f"\nDownload failed: {e.reason}\n  URL: {url}", file=sys.stderr)
+            sys.exit(1)
+        except OSError as e:
+            print(f"\nDownload failed: {e}\n  URL: {url}", file=sys.stderr)
+            sys.exit(1)
     return zip_path
 
 
