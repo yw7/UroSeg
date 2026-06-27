@@ -72,7 +72,7 @@ class SegModel:
     labels: dict        # {"background": 0, "prostate": [1,2,3], "prostate_tz": 2}
 
     def install(self, data_dir: Path) -> None:
-        """Download zip and extract to data_dir/<name>/<release_id>/."""
+        """Download zip to a temp dir, extract to data_dir/<name>/<release_id>/, delete zip."""
         ...
 
     def predict(self, input: Path, output_dir: Path, **kwargs) -> None:
@@ -86,8 +86,11 @@ class SegModel:
 
 Private helpers in `base.py` (not nnunet-specific, reusable by any backend):
 - `_extract_release_id(url: str) -> str` — derives release tag from URL second-to-last segment
-- `_download_and_extract(url: str, dest: Path) -> None` — downloads zip, extracts in place
+- `_download_zip(url: str, tmp_dir: Path) -> Path` — downloads zip to a temp directory, returns zip path
+- `_extract_zip(zip_path: Path, dest: Path) -> None` — extracts zip contents to dest, deletes zip after
 - `_find_model_dir(name: str, data_dir: Path) -> Path` — searches `data_dir/<name>/` newest-release-first
+
+`install()` flow: download zip → `tmp/` → extract to `data_dir/<name>/<release_id>/` → delete zip.
 
 ### `uroseg/models/base.py` — NNUNetSegModel
 
