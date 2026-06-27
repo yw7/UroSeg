@@ -35,7 +35,7 @@ def test_install_skips_no_url(tmp_path, capsys):
 
 def test_install_skips_if_already_installed(tmp_path, capsys):
     from uroseg.models.prostate import Prostate
-    release_id = 'r20260101'
+    release_id = '20260627'
     (tmp_path / 'prostate' / release_id).mkdir(parents=True)
     Prostate().install(tmp_path)
     assert 'already installed' in capsys.readouterr().out.lower()
