@@ -79,7 +79,7 @@ def run_predict_cli(model: SegModel, args, largest_component: bool = False) -> N
             if largest_component:
                 from uroseg.tools.largest_component import keep_largest_component
                 img = Image(
-                    data=keep_largest_component(img.data),
+                    data=keep_largest_component(img.data, binarize=True),
                     affine=img.affine,
                     header=img.header,
                 )

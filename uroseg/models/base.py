@@ -133,5 +133,5 @@ class NNUNetSegModel(SegModel):
         img_1mm = img_canon.resample((1.0, 1.0, 1.0))
         model_dir = _find_model_dir(self.name, _resolve_data_dir())
         seg = run_predict_array(model_dir, img_1mm, fold=fold, device=device)
-        seg.data = keep_largest_component(seg.data)
+        seg.data = keep_largest_component(seg.data, binarize=True)
         return seg
