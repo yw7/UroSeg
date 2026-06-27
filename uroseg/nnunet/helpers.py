@@ -76,14 +76,9 @@ def run_predict(
         allow_tqdm=True,
     )
 
-    # Walk into trainer__plans__config/fold_N structure
-    fold_dir = model_dir
-    for child in model_dir.iterdir():
-        if child.is_dir():
-            candidate = child / f'fold_{fold}'
-            if candidate.exists():
-                fold_dir = child
-                break
+    # Find the trainer dir that contains fold_N (handles 1 or 2 levels of nesting)
+    fold_matches = sorted(model_dir.glob(f'**/fold_{fold}'))
+    fold_dir = fold_matches[0].parent if fold_matches else model_dir
 
     predictor.initialize_from_trained_model_folder(
         str(fold_dir),
