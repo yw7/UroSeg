@@ -56,7 +56,7 @@ def main() -> None:
         run()
     elif cmd == 'predict_nnunet':
         sys.argv = sys.argv[:1] + sys.argv[2:]
-        from uroseg.commands.predict_nnunet import main as run
+        from uroseg.nnunet.predict import main as run
         run()
     elif cmd.startswith('-'):
         print(f"Unknown option: {cmd}. Run 'uroseg --help' for help.", file=sys.stderr)

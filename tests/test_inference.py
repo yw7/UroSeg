@@ -1,22 +1,24 @@
+from __future__ import annotations
 import argparse
 import pytest
 from unittest.mock import MagicMock, patch
-from uroseg.utils.inference_utils import add_common_inference_args
 import uroseg.models.prostate as prostate_mod
 import uroseg.models.bladder as bladder_mod
 
 
-def test_add_common_inference_args_required():
+def test_add_inference_args_required():
+    from uroseg.nnunet.predict import add_inference_args
     parser = argparse.ArgumentParser()
-    add_common_inference_args(parser)
+    add_inference_args(parser)
     args = parser.parse_args(['-i', 'img.nii.gz', '-o', 'out/'])
     assert args.img == 'img.nii.gz'
     assert args.out == 'out/'
 
 
-def test_add_common_inference_args_defaults():
+def test_add_inference_args_defaults():
+    from uroseg.nnunet.predict import add_inference_args
     parser = argparse.ArgumentParser()
-    add_common_inference_args(parser)
+    add_inference_args(parser)
     args = parser.parse_args(['-i', 'img.nii.gz', '-o', 'out/'])
     assert args.fold == 0
     assert args.device == 'cuda'
@@ -37,7 +39,8 @@ def test_bladder_module_has_main():
 def test_prostate_main_parser_prog():
     with patch('sys.argv', ['uroseg', '-h']):
         parser = argparse.ArgumentParser(prog='uroseg prostate')
-        add_common_inference_args(parser)
+        from uroseg.nnunet.predict import add_inference_args
+        add_inference_args(parser)
         assert parser.prog == 'uroseg prostate'
 
 
@@ -52,4 +55,3 @@ def test_load_model_module_invalid_organ_raises():
     from uroseg.utils.utils import load_model_module
     with pytest.raises(ValueError):
         load_model_module('nonexistent_organ_xyz')
-

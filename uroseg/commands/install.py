@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from uroseg.utils.utils import resolve_data_path, load_model_module, get_all_models, data_dir_help
-from uroseg.utils.inference_utils import download_weights
+from uroseg.models.base import _download_zip, _extract_zip
 
 
 def extract_release_id(url: str) -> str:
@@ -31,7 +31,11 @@ def download_and_extract(model, nnunet_task: str, data_path: Path) -> None:
     release_id = extract_release_id(url)
     results_dir = data_path / 'nnUNet' / 'results' / release_id
     print(f"  Downloading {model.name}...")
-    download_weights(url, results_dir)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        from pathlib import Path as _Path
+        zip_path = _download_zip(url, _Path(tmp))
+        _extract_zip(zip_path, results_dir)
     print(f"  Done. Weights installed at {results_dir / nnunet_task}")
 
 
