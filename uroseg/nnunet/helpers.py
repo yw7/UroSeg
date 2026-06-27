@@ -81,13 +81,7 @@ def _run_inference(predictor, img: Image) -> 'np.ndarray':
     spacing = [float(s) for s in img.header.get_zooms()[:3]]
     input_array = img.data[np.newaxis].astype(np.float32)
     with _suppress_nnunet():
-        seg_array = predictor.predict_single_npy_array(
-            input_array,
-            {'spacing': spacing},
-            segmentation_previous_stage=None,
-            output_file_truncated=None,
-            save_probabilities=False,
-        )
+        seg_array = predictor.predict_single_npy_array(input_array, {'spacing': spacing})
     return seg_array
 
 
