@@ -39,7 +39,7 @@ def map_json(tmp_path):
 # ── map_labels ────────────────────────────────────────────────────────────────
 
 def test_map_labels_remaps_values(seg_file, map_json, tmp_path):
-    from uroseg.commands.map_labels import apply_map
+    from uroseg.tools.map_labels import apply_map
     img = Image.load(seg_file)
     with open(map_json) as f:
         mapping = json.load(f)
@@ -50,7 +50,7 @@ def test_map_labels_remaps_values(seg_file, map_json, tmp_path):
 
 
 def test_map_labels_unmapped_becomes_zero(seg_file, tmp_path):
-    from uroseg.commands.map_labels import apply_map
+    from uroseg.tools.map_labels import apply_map
     img = Image.load(seg_file)
     mapping = {"1": 5}
     result = apply_map(img.data, mapping)
@@ -59,7 +59,7 @@ def test_map_labels_unmapped_becomes_zero(seg_file, tmp_path):
 
 
 def test_map_labels_keep_unmapped(seg_file, tmp_path):
-    from uroseg.commands.map_labels import apply_map
+    from uroseg.tools.map_labels import apply_map
     img = Image.load(seg_file)
     # Only map label 1 -> 5; label 2 should be kept unchanged
     mapping = {1: 5}
@@ -180,7 +180,7 @@ def test_map_labels_cli(seg_file, map_json, tmp_path):
 # ── resample ──────────────────────────────────────────────────────────────────
 
 def test_resample_changes_spacing(img_file, tmp_path):
-    from uroseg.commands.resample import process_one
+    from uroseg.tools.resample import process_one
     import argparse
     out = tmp_path / 'resampled.nii.gz'
     args = argparse.Namespace(mm=[2.0, 2.0, 2.0], overwrite=True)
@@ -192,7 +192,7 @@ def test_resample_changes_spacing(img_file, tmp_path):
 
 def test_resample_mm_single_value_isotropic(img_file, tmp_path):
     """--mm 1 (single value) resamples isotropically."""
-    from uroseg.commands.resample import process_one
+    from uroseg.tools.resample import process_one
     import argparse
     out = tmp_path / 'resampled_iso.nii.gz'
     args = argparse.Namespace(mm=[1.0], overwrite=True)
@@ -204,7 +204,7 @@ def test_resample_mm_single_value_isotropic(img_file, tmp_path):
 
 def test_resample_mm_three_values_anisotropic(img_file, tmp_path):
     """--mm 1 0.5 0.5 (three values) resamples anisotropically."""
-    from uroseg.commands.resample import process_one
+    from uroseg.tools.resample import process_one
     import argparse
     out = tmp_path / 'resampled_aniso.nii.gz'
     args = argparse.Namespace(mm=[1.0, 0.5, 0.5], overwrite=True)
@@ -262,7 +262,7 @@ def test_resample_cli(img_file, tmp_path):
 # ── reorient ──────────────────────────────────────────────────────────────────
 
 def test_reorient_produces_output(img_file, tmp_path):
-    from uroseg.commands.reorient_canonical import process_one
+    from uroseg.tools.reorient import process_one
     import argparse
     out = tmp_path / 'reoriented.nii.gz'
     args = argparse.Namespace(overwrite=True)
@@ -289,7 +289,7 @@ def test_reorient_cli(img_file, tmp_path):
 # ── largest_component ─────────────────────────────────────────────────────────
 
 def test_keep_largest_component_removes_small(tmp_path):
-    from uroseg.commands.largest_component import keep_largest_component
+    from uroseg.tools.largest_component import keep_largest_component
     data = np.zeros((30, 30, 30), dtype=np.int16)
     data[1:3, 1:3, 1:3] = 1    # small blob
     data[10:20, 10:20, 10:20] = 1  # large blob
@@ -299,7 +299,7 @@ def test_keep_largest_component_removes_small(tmp_path):
 
 
 def test_keep_largest_component_per_label(tmp_path):
-    from uroseg.commands.largest_component import keep_largest_component
+    from uroseg.tools.largest_component import keep_largest_component
     data = np.zeros((30, 30, 30), dtype=np.int16)
     data[1:3, 1:3, 1:3] = 1
     data[10:20, 10:20, 10:20] = 1
@@ -327,7 +327,7 @@ def test_largest_component_cli(seg_file, tmp_path):
 
 def test_keep_largest_component_binarize(tmp_path):
     """--binarize: keep only the single largest connected region across all labels."""
-    from uroseg.commands.largest_component import keep_largest_component
+    from uroseg.tools.largest_component import keep_largest_component
     data = np.zeros((30, 30, 30), dtype=np.int16)
     # Large multi-label blob (connected)
     data[10:20, 10:20, 10:20] = 1
@@ -344,7 +344,7 @@ def test_keep_largest_component_binarize(tmp_path):
 
 def test_keep_largest_component_dilate(tmp_path):
     """--dilate connects nearby components then masks back to original voxels."""
-    from uroseg.commands.largest_component import keep_largest_component
+    from uroseg.tools.largest_component import keep_largest_component
     data = np.zeros((30, 30, 30), dtype=np.int16)
     # Two small blobs of label 1 separated by a 2-voxel gap
     data[10:13, 10:13, 10:13] = 1   # left blob  (~27 voxels)
@@ -373,7 +373,7 @@ def test_dilate_uses_6conn_not_26conn():
     This test documents that dilation employs explicit 6-connectivity structure (self-documenting;
     matches scipy default) and ensures the behavior remains stable.
     """
-    from uroseg.commands.largest_component import keep_largest_component
+    from uroseg.tools.largest_component import keep_largest_component
     data = np.zeros((25, 25, 25), dtype=np.int16)
     data[3:8, 3:8, 3:8] = 1    # blob A (5x5x5 = 125 voxels)
     data[9:14, 9:14, 9:14] = 1  # blob B (5x5x5 = 125 voxels), 1-voxel diagonal gap
@@ -388,7 +388,7 @@ def test_dilate_uses_6conn_not_26conn():
 
 def test_keep_largest_component_26connectivity():
     """Diagonal neighbours (face-corner touching) should be connected with 26-connectivity."""
-    from uroseg.commands.largest_component import keep_largest_component
+    from uroseg.tools.largest_component import keep_largest_component
     data = np.zeros((10, 10, 10), dtype=np.int16)
     # Two voxels touching only at a corner (diagonal in all three axes)
     data[3, 3, 3] = 1
@@ -493,7 +493,7 @@ def test_crop_margin_cli(img_file, seg_file, tmp_path):
 # ── preview_jpg ───────────────────────────────────────────────────────────────
 
 def test_make_preview_no_seg(img_file):
-    from uroseg.commands.preview_jpg import make_preview
+    from uroseg.tools.preview import make_preview
     img = Image.load(img_file)
     preview = make_preview(img.data, seg_data=None)
     assert preview.ndim == 3
@@ -502,7 +502,7 @@ def test_make_preview_no_seg(img_file):
 
 
 def test_make_preview_with_seg(img_file, seg_file):
-    from uroseg.commands.preview_jpg import make_preview
+    from uroseg.tools.preview import make_preview
     img = Image.load(img_file)
     seg = Image.load(seg_file)
     preview = make_preview(img.data, seg_data=seg.data)
@@ -512,7 +512,7 @@ def test_make_preview_with_seg(img_file, seg_file):
 
 def test_make_preview_orient_ax(img_file):
     """--orient ax extracts a slice from axis 2 (shape: [dim0, dim1, 3])."""
-    from uroseg.commands.preview_jpg import make_preview
+    from uroseg.tools.preview import make_preview
     img = Image.load(img_file)
     # ax → axis 2; slice shape should be (dim0, dim1)
     preview = make_preview(img.data, orient='ax', sliceloc=0.5)
@@ -526,7 +526,7 @@ def test_make_preview_orient_ax(img_file):
 
 def test_make_preview_sliceloc_25(img_file):
     """sliceloc=0.25 produces a slice at 25% of the sagittal axis."""
-    from uroseg.commands.preview_jpg import make_preview
+    from uroseg.tools.preview import make_preview
     img = Image.load(img_file)
     preview = make_preview(img.data, orient='sag', sliceloc=0.25)
     assert preview.ndim == 3
@@ -535,14 +535,14 @@ def test_make_preview_sliceloc_25(img_file):
 
 def test_parse_label_text_pairs():
     """_parse_label_text parses label:text pairs."""
-    from uroseg.commands.preview_jpg import _parse_label_text
+    from uroseg.tools.preview import _parse_label_text
     result = _parse_label_text(['1:L1', '2:L2'])
     assert result == {1: 'L1', 2: 'L2'}
 
 
 def test_parse_label_text_json(tmp_path):
     """_parse_label_text parses a JSON file."""
-    from uroseg.commands.preview_jpg import _parse_label_text
+    from uroseg.tools.preview import _parse_label_text
     labels_json = tmp_path / 'labels.json'
     labels_json.write_text(json.dumps({'1': 'L1', '2': 'L2'}))
     result = _parse_label_text([str(labels_json)])
@@ -550,7 +550,7 @@ def test_parse_label_text_json(tmp_path):
 
 
 def test_parse_label_text_empty():
-    from uroseg.commands.preview_jpg import _parse_label_text
+    from uroseg.tools.preview import _parse_label_text
     assert _parse_label_text([]) == {}
 
 
@@ -649,7 +649,7 @@ def test_cpdir_skips_existing_without_overwrite(nifti_folder, tmp_path):
 # ── transform_seg2image ───────────────────────────────────────────────────────
 
 def test_transform_seg_matches_img_shape(img_file, seg_file, tmp_path):
-    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    from uroseg.tools.transform_seg2image import resample_seg_to_image
     # create a differently-shaped seg
     data = np.zeros((10, 10, 10), dtype=np.int16)
     data[2:8, 2:8, 2:8] = 1
@@ -662,7 +662,7 @@ def test_transform_seg_matches_img_shape(img_file, seg_file, tmp_path):
 
 def test_transform_seg2image_nearest_regression(img_file, seg_file, tmp_path):
     """Regression: --interpolation nearest produces integer segmentation output."""
-    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    from uroseg.tools.transform_seg2image import resample_seg_to_image
     seg = Image.load(seg_file)
     ref = Image.load(img_file)
     result = resample_seg_to_image(seg, ref, interpolation='nearest')
@@ -672,7 +672,7 @@ def test_transform_seg2image_nearest_regression(img_file, seg_file, tmp_path):
 
 def test_transform_seg2image_linear_produces_float(img_file, seg_file, tmp_path):
     """--interpolation linear produces float32 output."""
-    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    from uroseg.tools.transform_seg2image import resample_seg_to_image
     seg = Image.load(seg_file)
     ref = Image.load(img_file)
     result = resample_seg_to_image(seg, ref, interpolation='linear')
@@ -682,7 +682,7 @@ def test_transform_seg2image_linear_produces_float(img_file, seg_file, tmp_path)
 
 def test_transform_seg2image_label_single_voxel(tmp_path):
     """--interpolation label places single-voxel landmarks at center of mass."""
-    from uroseg.commands.transform_seg2image import resample_seg_to_image
+    from uroseg.tools.transform_seg2image import resample_seg_to_image
     import nibabel as nib
     # Seg: 20^3 at 1mm, two single-voxel labels
     seg_data = np.zeros((20, 20, 20), dtype=np.uint8)
@@ -746,3 +746,53 @@ def test_transform_seg2image_cli(img_file, seg_file, tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert (out / 'seg_transformed.nii.gz').exists()
+
+
+# ── public API functions ──────────────────────────────────────────────────────
+
+def test_map_labels_public_api(seg_file, tmp_path):
+    from uroseg.tools.map_labels import map_labels
+    out = tmp_path / 'out.nii.gz'
+    result = map_labels(seg_file, out, map={1: 10, 2: 20})
+    assert result == out
+    assert out.exists()
+    img = Image.load(out)
+    assert img.data[3, 3, 3] == 10
+
+
+def test_resample_public_api(img_file, tmp_path):
+    from uroseg.tools.resample import resample
+    out = tmp_path / 'out.nii.gz'
+    result = resample(img_file, out, mm=2.0)
+    assert result == out
+    assert out.exists()
+
+
+def test_reorient_public_api(img_file, tmp_path):
+    from uroseg.tools.reorient import reorient
+    out = tmp_path / 'out.nii.gz'
+    result = reorient(img_file, out)
+    assert result == out
+    assert out.exists()
+
+
+def test_largest_component_public_api(seg_file, tmp_path):
+    from uroseg.tools.largest_component import largest_component
+    out = tmp_path / 'out.nii.gz'
+    result = largest_component(seg_file, out)
+    assert result == out
+    assert out.exists()
+
+
+def test_map_labels_dir_public_api(tmp_path):
+    from uroseg.tools.map_labels import map_labels_dir
+    import nibabel as nib
+    in_dir = tmp_path / 'in'
+    in_dir.mkdir()
+    out_dir = tmp_path / 'out'
+    data = np.zeros((5, 5, 5), dtype=np.int16)
+    data[1, 1, 1] = 1
+    for i in range(2):
+        nib.save(nib.Nifti1Image(data, np.eye(4)), in_dir / f'seg{i}.nii.gz')
+    map_labels_dir(in_dir, out_dir, map={1: 99}, out_suffix='_mapped', n_jobs=1)
+    assert len(list(out_dir.glob('*.nii.gz'))) == 2
