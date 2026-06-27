@@ -7,6 +7,10 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from uroseg.utils.image import Image, save_nifti_seg
+from uroseg.tools.transform_seg2image import resample_seg_to_image
+from uroseg.tools.largest_component import keep_largest_component
+
 
 def _extract_release_id(url: str) -> str:
     return url.rstrip('/').split('/')[-2]
@@ -73,8 +77,23 @@ class SegModel:
             _extract_zip(zip_path, dest)
         print(f"  Done. Weights installed at {dest}")
 
-    def predict(self, input: Path, output_dir: Path, **kwargs) -> None:
-        raise NotImplementedError(f"{self.__class__.__name__} does not implement predict()")
+    def predict_image(self, img: Image, **kwargs) -> Image:
+        """Process a single image in memory. Return seg in the model's working space."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement predict_image()")
+
+    def predict(self, input: Path | str, output_dir: Path | str,
+                iso: bool = False, **kwargs) -> Path:
+        """Load → predict_image → (optional) transform back to original space → save."""
+        input_path = Path(input)
+        img_orig = Image.load(input_path)
+        seg = self.predict_image(img_orig, **kwargs)
+        if not iso:
+            seg = resample_seg_to_image(seg, img_orig)
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / input_path.name
+        save_nifti_seg(seg.data, seg.affine, seg.header, str(out_path))
+        return out_path
 
     def predict_dir(self, input_dir: Path, output_dir: Path,
                     n_jobs: int = 1, **kwargs) -> None:
@@ -95,8 +114,13 @@ class SegModel:
 class NNUNetSegModel(SegModel):
     nnunet_task: str
 
-    def predict(self, input: Path, output_dir: Path,
-                fold: int = 0, device: str = 'cuda', **kwargs) -> None:
-        from uroseg.nnunet.helpers import run_predict
+    def predict_image(self, img: Image,
+                      fold: int = 0, device: str = 'cuda') -> Image:
+        """Reorient → 1 mm iso → nnunet → largest_component. Returns seg in 1 mm canonical space."""
+        from uroseg.nnunet.helpers import run_predict_array
+        img_canon = img.as_canonical()
+        img_1mm = img_canon.resample((1.0, 1.0, 1.0))
         model_dir = _find_model_dir(self.name, _resolve_data_dir())
-        run_predict(model_dir, [Path(input)], Path(output_dir), fold=fold, device=device)
+        seg = run_predict_array(model_dir, img_1mm, fold=fold, device=device)
+        seg.data = keep_largest_component(seg.data)
+        return seg

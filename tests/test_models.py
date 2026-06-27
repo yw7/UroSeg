@@ -46,12 +46,124 @@ def test_nnunet_segmodel_is_segmodel():
     assert issubclass(NNUNetSegModel, SegModel)
 
 
-def test_segmodel_predict_raises():
+def test_segmodel_predict_image_raises_not_implemented():
+    """predict_image() raises NotImplementedError on the base class."""
+    import numpy as np
+    import nibabel as nib
     from uroseg.models.base import SegModel
+    from uroseg.utils.image import Image
+    class M(SegModel):
+        name = 'x'; description = ''; weights_url = ''; labels = {}
+    data = np.zeros((5, 5, 5), dtype=np.float32)
+    img = Image(data=data, affine=np.eye(4), header=nib.Nifti1Image(data, np.eye(4)).header)
+    with pytest.raises(NotImplementedError):
+        M().predict_image(img)
+
+
+def test_segmodel_predict_raises_via_predict_image(tmp_path):
+    """predict() delegates to predict_image(); NotImplementedError propagates."""
+    import numpy as np
+    import nibabel as nib
+    from uroseg.models.base import SegModel
+    inp = tmp_path / 'a.nii.gz'
+    nib.save(nib.Nifti1Image(np.zeros((5, 5, 5), dtype=np.float32), np.eye(4)), str(inp))
     class M(SegModel):
         name = 'x'; description = ''; weights_url = ''; labels = {}
     with pytest.raises(NotImplementedError):
-        M().predict(Path('x.nii.gz'), Path('/tmp'))
+        M().predict(inp, tmp_path / 'out')
+
+
+def test_segmodel_predict_io_wrapper_iso_false(tmp_path):
+    """predict() with iso=False transforms seg back to original space."""
+    import numpy as np
+    import nibabel as nib
+    from uroseg.models.base import SegModel
+    from uroseg.utils.image import Image
+
+    # 2 mm isotropic input image, shape (8, 8, 8)
+    data = np.ones((8, 8, 8), dtype=np.float32)
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    inp = tmp_path / 'input.nii.gz'
+    nib.save(nib.Nifti1Image(data, affine), str(inp))
+
+    class M(SegModel):
+        name = 'x'; description = ''; weights_url = ''; labels = {}
+        def predict_image(self, img, **kwargs):
+            # Simulate model that returns seg in 1 mm iso space
+            resampled = img.resample((1.0, 1.0, 1.0))
+            seg_data = np.zeros_like(resampled.data, dtype=np.uint8)
+            seg_data[5:11, 5:11, 5:11] = 1
+            return Image(seg_data, resampled.affine, resampled.header)
+
+    out_path = M().predict(inp, tmp_path / 'out', iso=False)
+    assert out_path.exists()
+    assert out_path.name == 'input.nii.gz'
+    result = Image.load(out_path)
+    # iso=False: affine diagonal should be ~2 mm (original spacing)
+    np.testing.assert_allclose(np.abs(result.affine[0, 0]), 2.0, atol=0.2)
+
+
+def test_segmodel_predict_io_wrapper_iso_true(tmp_path):
+    """predict() with iso=True leaves seg in the model's working space."""
+    import numpy as np
+    import nibabel as nib
+    from uroseg.models.base import SegModel
+    from uroseg.utils.image import Image
+
+    data = np.ones((8, 8, 8), dtype=np.float32)
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    inp = tmp_path / 'input.nii.gz'
+    nib.save(nib.Nifti1Image(data, affine), str(inp))
+
+    class M(SegModel):
+        name = 'x'; description = ''; weights_url = ''; labels = {}
+        def predict_image(self, img, **kwargs):
+            resampled = img.resample((1.0, 1.0, 1.0))
+            seg_data = np.zeros_like(resampled.data, dtype=np.uint8)
+            return Image(seg_data, resampled.affine, resampled.header)
+
+    out_path = M().predict(inp, tmp_path / 'out', iso=True)
+    assert out_path.exists()
+    result = Image.load(out_path)
+    # iso=True: stays in 1 mm space — diagonal should be ~1 mm
+    np.testing.assert_allclose(np.abs(result.affine[0, 0]), 1.0, atol=0.2)
+
+
+def test_nnunet_predict_image_runs_pipeline(tmp_path):
+    """NNUNetSegModel.predict_image reorients, resamples, calls run_predict_array, keeps largest CC."""
+    import numpy as np
+    import nibabel as nib
+    from unittest.mock import patch
+    from uroseg.models.base import NNUNetSegModel
+    from uroseg.utils.image import Image
+
+    class TestModel(NNUNetSegModel):
+        name = 'test'; description = ''; weights_url = ''
+        labels = {}; nnunet_task = 'Dataset999_Test'
+
+    # 2 mm isotropic input
+    data = np.ones((8, 8, 8), dtype=np.float32)
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    img = Image(data=data, affine=affine, header=nib.Nifti1Image(data, affine).header)
+
+    def fake_run_predict_array(model_dir, img_1mm, fold, device):
+        # Return a seg with same shape as 1 mm resampled input
+        seg = np.zeros(img_1mm.data.shape, dtype=np.uint8)
+        # Two disconnected blobs — keep_largest_component will reduce to one
+        mid = np.array(seg.shape) // 2
+        seg[mid[0]-2:mid[0]+2, mid[1]-2:mid[1]+2, mid[2]-2:mid[2]+2] = 1
+        seg[0:2, 0:2, 0:2] = 1  # small blob that should be removed
+        return Image(data=seg, affine=img_1mm.affine, header=img_1mm.header)
+
+    with patch('uroseg.models.base._find_model_dir', return_value=tmp_path), \
+         patch('uroseg.models.base._resolve_data_dir', return_value=tmp_path), \
+         patch('uroseg.nnunet.helpers.run_predict_array', side_effect=fake_run_predict_array):
+        result = TestModel().predict_image(img, fold=0, device='cpu')
+
+    assert isinstance(result, Image)
+    assert result.data.ndim == 3
+    # After keep_largest_component, only one blob remains — corner blob gone
+    assert result.data[0, 0, 0] == 0
 
 
 def test_segmodel_predict_dir_calls_predict(tmp_path):
