@@ -72,6 +72,7 @@ class SegModel:
     description: str
     weights_url: str
     labels: dict
+    post_largest_component: bool = False
 
     def install(self, data_dir: Path) -> None:
         if not self.weights_url:
@@ -88,16 +89,24 @@ class SegModel:
             _extract_zip(zip_path, dest)
         print(f"  Done. Weights installed at {dest}")
 
-    def predict_image(self, img: Image, **kwargs) -> Image:
-        """Process a single image in memory. Return seg in the model's working space."""
+    def init_predictor(self, model_dir: Path, fold: int = 0, device: str = 'cuda'):
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement init_predictor()")
+
+    def predict_image(self, predictor, img: Image) -> Image:
+        """Run inference on img (canonical 1mm, already preprocessed). Return seg in model space."""
         raise NotImplementedError(f"{self.__class__.__name__} does not implement predict_image()")
 
     def predict(self, input: Path | str, output_dir: Path | str,
-                iso: bool = False, **kwargs) -> Path:
-        """Load → predict_image → (optional) transform back to original space → save."""
+                fold: int = 0, device: str = 'cuda', iso: bool = False) -> Path:
+        """Load → canonical+1mm → init_predictor → predict_image → post-process → save."""
         input_path = Path(input)
         img_orig = Image.load(input_path)
-        seg = self.predict_image(img_orig, **kwargs)
+        img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
+        model_dir = _find_model_dir(self.name, _resolve_data_dir())
+        predictor = self.init_predictor(model_dir, fold=fold, device=device)
+        seg = self.predict_image(predictor, img_1mm)
+        if self.post_largest_component:
+            seg.data = keep_largest_component(seg.data, binarize=True)
         if not iso:
             seg = resample_seg_to_image(seg, img_orig)
         out_dir = Path(output_dir)
@@ -125,13 +134,12 @@ class SegModel:
 class NNUNetSegModel(SegModel):
     nnunet_task: str
 
-    def predict_image(self, img: Image,
-                      fold: int = 0, device: str = 'cuda', **kwargs) -> Image:
-        """Reorient → 1 mm iso → nnunet → largest_component. Returns seg in 1 mm canonical space."""
-        from uroseg.nnunet.helpers import run_predict_array
-        img_canon = img.as_canonical()
-        img_1mm = img_canon.resample((1.0, 1.0, 1.0))
-        model_dir = _find_model_dir(self.name, _resolve_data_dir())
-        seg = run_predict_array(model_dir, img_1mm, fold=fold, device=device)
-        seg.data = keep_largest_component(seg.data, binarize=True)
-        return seg
+    def init_predictor(self, model_dir: Path, fold: int = 0, device: str = 'cuda'):
+        from uroseg.nnunet.helpers import _init_predictor
+        return _init_predictor(model_dir, fold=fold, device=device)
+
+    def predict_image(self, predictor, img: Image) -> Image:
+        """Pure inference on img (canonical 1mm). Returns seg in 1mm canonical space."""
+        from uroseg.nnunet.helpers import _run_inference
+        seg_array = _run_inference(predictor, img)
+        return Image(data=seg_array, affine=img.affine, header=img.header)
