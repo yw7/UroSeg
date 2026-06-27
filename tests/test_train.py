@@ -338,3 +338,26 @@ def test_train_cli_help():
     assert 'organ' in result.stdout
     assert '--fold' in result.stdout
     assert '--auglab-config' in result.stdout
+
+
+# ── nnunet.helpers tests ────────────────────────────────────────────────────
+
+def test_helpers_setup_env_sets_vars(tmp_path):
+    from uroseg.nnunet.helpers import setup_env
+    setup_env(tmp_path)
+    assert os.environ["nnUNet_raw"] == str(tmp_path / "nnUNet" / "raw")
+    assert os.environ["nnUNet_preprocessed"] == str(tmp_path / "nnUNet" / "preprocessed")
+    assert os.environ["nnUNet_results"] == str(tmp_path / "nnUNet" / "results")
+    assert os.environ["nnUNet_exports"] == str(tmp_path / "nnUNet" / "exports")
+
+
+def test_helpers_extract_dataset_id():
+    from uroseg.nnunet.helpers import extract_dataset_id
+    assert extract_dataset_id("Dataset101_Prostate") == 101
+    assert extract_dataset_id("Dataset010_Bladder") == 10
+
+
+def test_helpers_extract_dataset_id_bad_format():
+    from uroseg.nnunet.helpers import extract_dataset_id
+    with pytest.raises(ValueError):
+        extract_dataset_id("BadName")
