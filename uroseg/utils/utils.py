@@ -2,7 +2,6 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from importlib.resources import files
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -64,32 +63,26 @@ def data_dir_help() -> str:
 
 
 def load_model_module(name: str):
-    from importlib import import_module
-    available = sorted(
-        p.name[:-3]
-        for p in files('uroseg.resources.models').iterdir()
-        if p.name.endswith('.py') and p.name != '__init__.py'
-    )
-    if name not in available:
+    """Shim: load model module from uroseg.models.<name>."""
+    from uroseg.models import list_models
+    import importlib
+    if name not in list_models():
+        available = list_models()
         raise ValueError(
             f"Unknown model: {name!r}. Available: {available}\n"
             f"Run 'uroseg list' to see all models."
         )
-    return import_module(f'uroseg.resources.models.{name}')
+    return importlib.import_module(f'uroseg.models.{name}')
 
 
 def get_model(name: str):
-    return load_model_module(name).MODEL
+    from uroseg.models import get_model as _get_model
+    return _get_model(name)
 
 
 def get_all_models() -> dict:
-    from importlib import import_module
-    result = {}
-    for p in files('uroseg.resources.models').iterdir():
-        if p.name.endswith('.py') and p.name != '__init__.py':
-            stem = p.name[:-3]
-            result[stem] = import_module(f'uroseg.resources.models.{stem}').MODEL
-    return result
+    from uroseg.models import list_models, get_model as _get_model
+    return {name: _get_model(name) for name in list_models()}
 
 
 def normalize_labels(raw: dict) -> dict:

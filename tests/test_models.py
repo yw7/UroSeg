@@ -68,3 +68,51 @@ def test_segmodel_predict_dir_calls_predict(tmp_path):
 
     M().predict_dir(tmp_path, tmp_path / 'out', n_jobs=1)
     assert len(M.calls) == 1
+
+
+def test_prostate_class_attrs():
+    from uroseg.models.prostate import Prostate
+    p = Prostate()
+    assert p.name == 'prostate'
+    assert p.nnunet_task == 'Dataset101_Prostate'
+    assert p.labels['background'] == 0
+    assert isinstance(p.labels['prostate'], list)
+
+
+def test_bladder_class_attrs():
+    from uroseg.models.bladder import Bladder
+    b = Bladder()
+    assert b.name == 'bladder'
+    assert b.labels['bladder'] == 1
+
+
+def test_get_model_returns_prostate():
+    from uroseg.models import get_model
+    from uroseg.models.prostate import Prostate
+    m = get_model('prostate')
+    assert isinstance(m, Prostate)
+    assert m.name == 'prostate'
+
+
+def test_list_models():
+    from uroseg.models import list_models
+    models = list_models()
+    assert 'prostate' in models
+    assert 'bladder' in models
+
+
+def test_get_model_unknown_raises():
+    from uroseg.models import get_model
+    with pytest.raises(ValueError, match='Unknown model'):
+        get_model('nonexistent_xyz')
+
+
+def test_prostate_main_is_callable():
+    from uroseg.models.prostate import main
+    assert callable(main)
+
+
+def test_compat_model_attr():
+    from uroseg.models.prostate import MODEL, NNUNET_TASK
+    assert MODEL.name == 'prostate'
+    assert NNUNET_TASK == 'Dataset101_Prostate'

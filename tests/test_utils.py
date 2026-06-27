@@ -11,6 +11,7 @@ from uroseg.utils.utils import (
 )
 
 
+
 def test_collect_niftis_single_file(nifti_file):
     result = collect_niftis(nifti_file)
     assert result == [Path(nifti_file)]
@@ -96,22 +97,22 @@ def test_load_model_module_unknown_raises_value_error():
         load_model_module('nonexistent_model_xyz')
 
 
-def test_get_model_returns_modeldef():
-    from uroseg.models import ModelDef
+def test_get_model_returns_prostate():
+    from uroseg.utils.utils import get_model
+    from uroseg.models.prostate import Prostate
     model = get_model('prostate')
-    assert isinstance(model, ModelDef)
+    assert isinstance(model, Prostate)
     assert model.name == 'prostate'
-    assert 'labels' in vars(model) or hasattr(model, 'labels')
     assert 'background' in model.labels
     assert isinstance(model.labels['prostate'], list)
 
 
-def test_get_model_bladder_returns_modeldef():
-    from uroseg.models import ModelDef
+def test_get_model_bladder():
+    from uroseg.utils.utils import get_model
+    from uroseg.models.bladder import Bladder
     model = get_model('bladder')
-    assert isinstance(model, ModelDef)
+    assert isinstance(model, Bladder)
     assert model.name == 'bladder'
-    assert 'bladder' in model.labels
 
 
 def test_get_model_unknown_raises():
@@ -119,9 +120,9 @@ def test_get_model_unknown_raises():
         get_model('nonexistent_organ')
 
 
-def test_get_all_models_returns_modeldef_dict():
-    from uroseg.models import ModelDef
+def test_get_all_models_returns_dict():
+    from uroseg.utils.utils import get_all_models
     models = get_all_models()
     assert 'prostate' in models
     assert 'bladder' in models
-    assert all(isinstance(m, ModelDef) for m in models.values())
+    assert all(hasattr(m, 'name') for m in models.values())

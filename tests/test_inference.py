@@ -2,8 +2,8 @@ import argparse
 import pytest
 from unittest.mock import MagicMock, patch
 from uroseg.utils.inference_utils import add_common_inference_args
-import uroseg.resources.models.prostate as prostate_mod
-import uroseg.resources.models.bladder as bladder_mod
+import uroseg.models.prostate as prostate_mod
+import uroseg.models.bladder as bladder_mod
 
 
 def test_add_common_inference_args_required():
@@ -52,3 +52,4 @@ def test_load_model_module_invalid_organ_raises():
     from uroseg.utils.utils import load_model_module
     with pytest.raises(ValueError):
         load_model_module('nonexistent_organ_xyz')
+
