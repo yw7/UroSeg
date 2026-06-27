@@ -21,4 +21,4 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog='uroseg prostate', description=Prostate.description)
     add_inference_args(parser)
     args = parser.parse_args()
-    run_predict_cli(Prostate(), args)
+    run_predict_cli(Prostate(), args, largest_component=True)

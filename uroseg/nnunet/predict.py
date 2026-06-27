@@ -26,7 +26,7 @@ def add_inference_args(parser: argparse.ArgumentParser) -> None:
     add_common_args(parser)
 
 
-def run_predict_cli(model: SegModel, args) -> None:
+def run_predict_cli(model: SegModel, args, largest_component: bool = False) -> None:
     """Orchestrate the full inference workflow for a given model."""
     from uroseg.nnunet.helpers import run_predict
     from uroseg.models.base import _find_model_dir
@@ -76,6 +76,13 @@ def run_predict_cli(model: SegModel, args) -> None:
             if not args.overwrite and dest.exists():
                 continue
             img = Image.load(pred_file)
+            if largest_component:
+                from uroseg.tools.largest_component import keep_largest_component
+                img = Image(
+                    data=keep_largest_component(img.data),
+                    affine=img.affine,
+                    header=img.header,
+                )
             img.save(dest)
 
     if not args.quiet:
