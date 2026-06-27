@@ -328,10 +328,6 @@ def test_train_fails_when_no_images_tr(tmp_path):
                 main()
 
 
-@pytest.mark.xfail(
-    reason="cli.py still imports uroseg.commands.train (Task 8 will fix this)",
-    strict=True,
-)
 def test_train_cli_help():
     import subprocess, sys
     result = subprocess.run(

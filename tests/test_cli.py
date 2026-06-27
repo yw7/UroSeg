@@ -19,7 +19,7 @@ def test_list_shows_models():
 
 
 def test_list_prints_model_names(capsys):
-    from uroseg.commands.list_models import main
+    from uroseg.tools.list_models import main
     main()
     out = capsys.readouterr().out
     assert 'prostate' in out
@@ -97,3 +97,14 @@ def test_train_help_exits_zero():
     result = run_uroseg('train', '-h')
     assert result.returncode == 0
     assert 'Engines:' in result.stdout  # new train.py prints _HELP; old argparse doesn't print 'Engines:'
+
+
+def test_cli_uses_new_tool_paths():
+    """Verify CLI still dispatches map/resample/etc correctly after tools/ move."""
+    import subprocess, sys
+    result = subprocess.run(
+        [sys.executable, '-m', 'uroseg.cli', 'map', '--help'],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    assert '--seg' in result.stdout or '--seg' in result.stderr

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from uroseg.utils.utils import get_all_models
+from uroseg.models import list_models as _list_models, get_model
 
 _COMMANDS = {
     'map':                 'Remap label IDs',
@@ -17,13 +17,14 @@ _COMMANDS = {
 
 
 def show_help() -> None:
-    models = get_all_models()
+    names = _list_models()
     lines = ['uroseg — urological anatomy segmentation', '']
     lines.append('Models:')
-    if models:
-        name_w = max(len(n) for n in models) + 2
-        for name, info in sorted(models.items()):
-            lines.append(f'  {name:<{name_w}}{info.description}')
+    if names:
+        name_w = max(len(n) for n in names) + 2
+        for name in sorted(names):
+            model = get_model(name)
+            lines.append(f'  {name:<{name_w}}{model.description}')
     else:
         lines.append('  (no models installed)')
     lines.append('')
