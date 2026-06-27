@@ -48,25 +48,25 @@ def _suppress_nnunet():
 def _init_predictor(model_dir: Path, fold: int = 0, device: str = 'cuda'):
     """Create and initialize an nnUNetPredictor (suppresses nnunet output)."""
     import torch
-    from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
 
     if device == 'cuda' and not torch.cuda.is_available():
         device = 'cpu'
     elif device == 'mps' and not torch.backends.mps.is_available():
         device = 'cpu'
 
-    predictor = nnUNetPredictor(
-        tile_step_size=0.5,
-        use_gaussian=True,
-        use_mirroring=True,
-        perform_everything_on_device=True,
-        device=torch.device(device),
-        verbose=False,
-        verbose_preprocessing=False,
-        allow_tqdm=False,
-    )
     fold_dir, checkpoint_name = _resolve_fold_dir(model_dir, fold)
     with _suppress_nnunet():
+        from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+        predictor = nnUNetPredictor(
+            tile_step_size=0.5,
+            use_gaussian=True,
+            use_mirroring=True,
+            perform_everything_on_device=True,
+            device=torch.device(device),
+            verbose=False,
+            verbose_preprocessing=False,
+            allow_tqdm=False,
+        )
         predictor.initialize_from_trained_model_folder(
             str(fold_dir),
             use_folds=(fold,),
