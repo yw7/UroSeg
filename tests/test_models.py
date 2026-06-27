@@ -272,3 +272,88 @@ def test_run_predict_array_returns_image(tmp_path):
     call_args = mock_predictor.predict_single_npy_array.call_args
     assert call_args[0][0].shape == (1, 10, 10, 10)   # (1, x, y, z)
     assert call_args[0][1]['spacing'] == [1.0, 1.0, 1.0]
+
+
+def test_suppress_nnunet_silences_print(capsys):
+    """_suppress_nnunet redirects stdout so prints are hidden."""
+    from uroseg.nnunet.helpers import _suppress_nnunet
+    with _suppress_nnunet():
+        print("should be hidden")
+    captured = capsys.readouterr()
+    assert captured.out == ""
+
+
+def test_suppress_nnunet_sets_env_vars():
+    """_suppress_nnunet sets dummy env vars for nnunet keys."""
+    import os
+    from uroseg.nnunet.helpers import _suppress_nnunet
+    keys = ('nnUNet_raw', 'nnUNet_preprocessed', 'nnUNet_results')
+    for k in keys:
+        os.environ.pop(k, None)
+    with _suppress_nnunet():
+        for k in keys:
+            assert os.environ.get(k) == ''
+
+
+def test_suppress_nnunet_restores_env(monkeypatch):
+    """_suppress_nnunet restores original env var values on exit."""
+    import os
+    from uroseg.nnunet.helpers import _suppress_nnunet
+    monkeypatch.setenv('nnUNet_raw', 'original_value')
+    with _suppress_nnunet():
+        pass
+    assert os.environ['nnUNet_raw'] == 'original_value'
+
+
+def test_init_predictor_initializes_from_folder(tmp_path):
+    """_init_predictor calls initialize_from_trained_model_folder on the predictor."""
+    import sys
+    from unittest.mock import MagicMock, patch
+    from uroseg.nnunet.helpers import _init_predictor
+
+    fold_dir = tmp_path / 'trainer' / 'fold_0'
+    fold_dir.mkdir(parents=True)
+    (fold_dir / 'checkpoint_final.pth').touch()
+
+    mock_predictor = MagicMock()
+    mock_nnunet = MagicMock()
+    mock_nnunet.nnUNetPredictor.return_value = mock_predictor
+
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+    mock_torch.backends.mps.is_available.return_value = False
+    mock_torch.device.return_value = MagicMock()
+
+    with patch.dict(sys.modules, {
+        'torch': mock_torch,
+        'nnunetv2': MagicMock(),
+        'nnunetv2.inference': MagicMock(),
+        'nnunetv2.inference.predict_from_raw_data': mock_nnunet,
+    }):
+        result = _init_predictor(tmp_path, fold=0, device='cpu')
+
+    assert result is mock_predictor
+    mock_predictor.initialize_from_trained_model_folder.assert_called_once()
+
+
+def test_run_inference_calls_predict_single(tmp_path):
+    """_run_inference passes (1,x,y,z) array and spacing; returns seg array."""
+    import numpy as np
+    import nibabel as nib
+    from unittest.mock import MagicMock
+    from uroseg.utils.image import Image
+    from uroseg.nnunet.helpers import _run_inference
+
+    data = np.ones((8, 8, 8), dtype=np.float32)
+    img = Image(data=data, affine=np.eye(4), header=nib.Nifti1Image(data, np.eye(4)).header)
+    expected = np.zeros((8, 8, 8), dtype=np.uint8)
+
+    mock_predictor = MagicMock()
+    mock_predictor.predict_single_npy_array.return_value = expected
+
+    result = _run_inference(mock_predictor, img)
+
+    assert result is expected
+    call_args = mock_predictor.predict_single_npy_array.call_args
+    assert call_args[0][0].shape == (1, 8, 8, 8)   # (1, x, y, z)
+    assert call_args[0][1]['spacing'] == [1.0, 1.0, 1.0]
