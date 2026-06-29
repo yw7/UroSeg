@@ -16,7 +16,8 @@ dependencies = [
     "pillow",
     "SimpleITK",
     "auglab @ git+https://github.com/neuropoly/AugLab.git@r20260615",
-    "nnunetv2",
+    "nnunetv2==2.6.2",
+    "kornia==0.7.3",
 ]
 
 [project.scripts]
