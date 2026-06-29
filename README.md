@@ -1,250 +1,195 @@
 # UroSeg
 
-Automated segmentation of urological anatomy from medical images. Built on [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) with [AugLab](https://github.com/neuropoly/AugLab) online augmentation.
+Automated segmentation of urological anatomy from MRI/CT. Built on [nnU-Net](https://github.com/MIC-DKFZ/nnUNet).
+
+<!-- Replace with a real preview: uroseg preview --img scan.nii.gz --seg seg.nii.gz --out docs/ -->
+![Sample segmentation](docs/preview.jpg)
 
 ---
 
-## Available Models
+## Models
 
-| Command | Anatomy | Modality | Labels |
-|---------|---------|----------|--------|
-| `uroseg prostate` | Prostate | MRI T2 | whole prostate, peripheral zone, central zone, anterior fibromuscular stroma |
-| `uroseg bladder` | Bladder | CT | bladder |
+| Model | Modality | Labels |
+|-------|----------|--------|
+| `prostate` | MRI T2 | whole prostate (1+2+3), transition zone (2), peripheral zone (3) |
+| `bladder` | CT | bladder (1) |
 
 ---
 
-## Installation
-
-### 1. Install PyTorch
-
-Use [light-the-torch](https://github.com/pmeier/light-the-torch) to automatically detect your CUDA version and install the correct PyTorch build:
+## Install
 
 ```bash
+# 1. PyTorch — auto-detects CUDA version
 pip install light-the-torch
 ltt install torch
-```
 
-### 2. Install UroSeg
-
-```bash
+# 2. UroSeg
 pip install uroseg
+
+# 3. Download model weights
+uroseg install --model prostate
+uroseg install --model bladder
+uroseg install --all       # all models
 ```
+
+Weights are stored in `~/uroseg/` by default. Override with `--data-dir PATH` or `export UROSEG_DATA=/path`.
 
 Development install:
 
 ```bash
-git clone https://github.com/yw7/uroseg
-cd uroseg
+git clone https://github.com/yw7/uroseg && cd uroseg
 pip install -e .
 ```
 
-### 3. Download model weights
+---
+
+## Predict
 
 ```bash
-uroseg install --model prostate
-uroseg install --model bladder
-uroseg install --all          # download all available models
-```
+# Single file — output written to segs/scan.nii.gz
+uroseg prostate scan.nii.gz segs/
+uroseg bladder  scan.nii.gz segs/
 
-By default, weights are stored in `~/uroseg/nnUNet/results/`. Override with `--data-dir PATH` or by setting `UROSEG_DATA=/path/to/data`.
+# Whole folder
+uroseg prostate mri_dir/ segs/
+
+# Keep output in 1mm isotropic space instead of resampling back to input
+uroseg prostate scan.nii.gz segs/ --iso
+
+# CPU / Apple Silicon
+uroseg prostate scan.nii.gz segs/ --device cpu
+uroseg prostate scan.nii.gz segs/ --device mps
+```
 
 ---
 
-## Usage
-
-### Inference
+## Tools
 
 ```bash
-# Single image — pass a folder as --out (output named automatically)
-uroseg prostate -i subject01_T2.nii.gz -o segs/
-uroseg bladder  -i subject01_CT.nii.gz  -o segs/
+# Volume — prints mm³ per label, or saves CSV for a folder
+uroseg volume --seg seg.nii.gz  --model prostate
+uroseg volume --seg segs/       --model prostate  --out volumes.csv
 
-# Batch (folder input → folder output)
-uroseg prostate -i /data/mri/ -o /data/segs/ -w 4
-```
+# Generate JPG slice preview with optional seg overlay
+uroseg preview --img scan.nii.gz --seg seg.nii.gz --out previews/ --orient sag
 
-### Utilities
+# Crop image to segmentation bounding box
+uroseg crop --img scan.nii.gz --seg seg.nii.gz --out cropped/
 
-```bash
-# Remap label IDs — JSON file or direct key:value pairs
-uroseg map -s seg.nii.gz -o remapped/ -m labels.json
-uroseg map -s seg.nii.gz -o remapped/ -m 1:2 3:0
-
-# Resample to 1×1×1 mm isotropic
-uroseg resample -i img.nii.gz -o img_1mm/ --mm 1
+# Resample to target voxel size
+uroseg resample --img scan.nii.gz --out out/ --mm 1         # isotropic 1mm
+uroseg resample --img scan.nii.gz --out out/ --mm 1 1 3     # anisotropic
 
 # Reorient to RAS canonical
-uroseg reorient -i img.nii.gz -o img_ras/
+uroseg reorient --img scan.nii.gz --out out/
 
-# Keep only the largest connected component per label
-uroseg largest_component -s seg.nii.gz -o seg_lc/
+# Keep only largest connected component
+uroseg largest_component --seg seg.nii.gz --out out/
+uroseg largest_component --seg seg.nii.gz --out out/ --binarize  # across all labels
 
-# Crop image and seg to segmentation bounding box
-uroseg crop -i img.nii.gz -s seg.nii.gz -o img_crop/
+# Remap label IDs
+uroseg map --seg seg.nii.gz --out out/ --map 1:10 2:20
+uroseg map --seg seg.nii.gz --out out/ --map labels.json
 
-# Generate JPG preview (single slice, optional seg overlay)
-uroseg preview -i img.nii.gz -s seg.nii.gz -o previews/ --orient sag --sliceloc 0.5
+# Resample segmentation to reference image space
+uroseg transform_seg2image --seg seg.nii.gz --img ref.nii.gz --out-seg out/
 
-# Resample segmentation to match reference image space (nearest-neighbour)
-uroseg transform_seg2image -s seg.nii.gz -i ref.nii.gz --out-seg seg_transformed/
+# Copy/rename NIfTI files
+uroseg cpdir --img dir/ --out copy/ --out-prefix sub01_
 
-# Copy NIfTI files with optional renaming
-uroseg cpdir -i /data/mri/ -o /data/mri_copy/ --out-suffix _copy
-
-# List available organ models
+# List available models and commands
 uroseg list
 ```
 
-### CLI reference
+All tools accept `--overwrite`, `--max-workers N`, and `--quiet`.
 
-All commands support `-r`/`--overwrite`, `-w`/`--max-workers N`, and `-q`/`--quiet`.
+---
 
-```
-uroseg <organ>              -i/--img PATH  -o/--out PATH  [-f/--fold N] [-d/--device cuda|cpu|mps]
-uroseg map                  -s/--seg PATH  -o/--out PATH  -m/--map JSON|KEY:VAL ...
-uroseg resample             -i/--img PATH  -o/--out PATH  -m/--mm X [Y Z]
-uroseg reorient             -i/--img PATH  -o/--out PATH
-uroseg largest_component    -s/--seg PATH  -o/--out PATH  [-l/--labels 1 2 3]
-uroseg preview              -i/--img PATH [-s/--seg PATH] -o/--out PATH [-t/--orient sag|ax|cor] [-l/--sliceloc 0.5]
-uroseg crop                 -i/--img PATH  -s/--seg PATH  -o/--out PATH  [-m/--margin N]
-uroseg transform_seg2image  -s/--seg PATH  -i/--img PATH  --out-seg PATH  [-x/--interpolation nearest|linear|label]
-uroseg cpdir                -i/--img PATH  -o/--out PATH  [--out-suffix SUFFIX] [--out-prefix PREFIX]
-uroseg install              --model NAME [NAME ...] | --all  [--data-dir PATH]
-uroseg train nnunet ORGAN   [-f/--fold N]  [--auglab-config JSON]  [--gpus N]  [--data-dir PATH]
-uroseg list
+## Python API
+
+```python
+import uroseg
+
+# Predict
+uroseg.Prostate().predict('scan.nii.gz', 'segs/')
+uroseg.Bladder().predict('scan.nii.gz', 'segs/')
+
+# Volume
+vols = uroseg.volume('seg.nii.gz', {'prostate': [1, 2, 3], 'prostate_tz': 2})
+# → {'prostate': 28540.0, 'prostate_tz': 12340.0}  (mm³)
+
+# Tools
+uroseg.resample('scan.nii.gz', 'out/', mm=1.0)
+uroseg.crop('scan.nii.gz', 'seg.nii.gz', 'out/')
+uroseg.reorient('scan.nii.gz', 'out/')
+uroseg.preview('scan.nii.gz', 'previews/', seg='seg.nii.gz', orient='sag')
 ```
 
 ---
 
-## Training
+## Add a New Model
 
-### 1. Create the model Python file
-
-Add `uroseg/resources/models/<organ>.py`:
+### 1. Create `uroseg/models/<name>.py`
 
 ```python
-import argparse
-from uroseg.models import ModelDef
-from uroseg.utils.inference_utils import add_common_inference_args, run_nnunet_predict
+from uroseg.models.base import NNUNetSegModel
 
-MODEL = ModelDef(
-    name="kidney",
-    description="Kidney (CT)",
-    weights_url="https://github.com/yw7/uroseg/releases/download/r.../Dataset020_Kidney_r....zip",
-    labels={"background": 0, "kidney": 1},
-)
+class Kidney(NNUNetSegModel):
+    name = "kidney"
+    description = "Kidney (CT)"
+    weights_url = "https://github.com/yw7/UroSeg/releases/download/<tag>/Dataset020_Kidney_<tag>.zip"
+    labels = {"background": 0, "kidney": 1}
+    nnunet_task = "Dataset020_Kidney"
 
-NNUNET_TASK = "Dataset020_Kidney"
-
+MODEL = Kidney()
+NNUNET_TASK = Kidney.nnunet_task
 
 def main():
-    parser = argparse.ArgumentParser(prog='uroseg kidney')
-    add_common_inference_args(parser)
-    args = parser.parse_args()
-    run_nnunet_predict(NNUNET_TASK, args)
+    Kidney.cli_main()
 ```
 
-Region-based model (sigmoid per region):
+For region-based models (sigmoid per region) use a list value: `"prostate": [1, 2, 3]`.
+
+### 2. Register in `uroseg/models/__init__.py`
 
 ```python
-import argparse
-from uroseg.models import ModelDef
-from uroseg.utils.inference_utils import add_common_inference_args, run_nnunet_predict
+from uroseg.models.kidney import Kidney
 
-MODEL = ModelDef(
-    name="prostate",
-    description="Prostate MRI-T2: whole prostate (1), peripheral zone (2), central zone (3)",
-    weights_url="https://github.com/yw7/uroseg/releases/download/r.../Dataset001_Prostate_r....zip",
-    labels={"background": 0, "prostate": [1, 2, 3], "prostate_tz": 2, "prostate_pz": 3},
-)
-
-NNUNET_TASK = "Dataset001_Prostate"
-
-
-def main():
-    parser = argparse.ArgumentParser(prog='uroseg prostate')
-    add_common_inference_args(parser)
-    args = parser.parse_args()
-    run_nnunet_predict(NNUNET_TASK, args)
+_REGISTRY = {cls.name: cls for cls in [Prostate, Bladder, Kidney]}
 ```
 
-`labels` values can be an `int` (single label) or a `list[int]` (region = union of sub-labels). When any label is a list, `uroseg train nnunet` automatically sets `regions_class_order` for nnU-Net region-based training. To add model-specific CLI flags, add `parser.add_argument(...)` calls before `parse_args()` and use them in your own inference logic instead of calling `run_nnunet_predict`.
-
-### 2. Place training data
+### 3. Place training data
 
 ```
 ~/uroseg/nnUNet/raw/Dataset020_Kidney/
-├── dataset.json          ← auto-generated by uroseg train nnunet
 ├── imagesTr/
-│   ├── kidney_001_0000.nii.gz   ← image channel 0
+│   ├── kidney_001_0000.nii.gz   ← image (channel 0)
 │   └── ...
 └── labelsTr/
-    ├── kidney_001.nii.gz        ← ground truth segmentation
+    ├── kidney_001.nii.gz        ← ground truth
     └── ...
 ```
 
-nnU-Net filename convention: images end in `_0000.nii.gz` (channel 0), labels have no channel suffix.
-
-### 3. Run training
+### 4. Train
 
 ```bash
-# Basic
 uroseg train nnunet kidney
 
-# With AugLab augmentation config
+# With AugLab augmentation
 uroseg train nnunet kidney --auglab-config auglab.json
 
-# Custom data directory
-uroseg train nnunet kidney --data-dir /scratch/uroseg_data
+# Custom data path
+uroseg train nnunet kidney --data-dir /scratch/data
 ```
 
-`uroseg train nnunet` automatically:
-- Generates `dataset.json` from the model JSON
-- Sets `nnUNet_raw`, `nnUNet_preprocessed`, `nnUNet_results` environment variables
-- Copies `nnUNetTrainerDAExt` from the auglab package into nnunetv2's trainer directory (required so nnU-Net can discover it)
-- Runs `nnUNetv2_plan_and_preprocess` (skipped if already done)
-- Runs `nnUNetv2_train` with `nnUNetTrainerDAExt` (AugLab's trainer subclass)
-
-Trained model location:
+Generates `dataset.json`, runs `nnUNetv2_plan_and_preprocess` and `nnUNetv2_train`. Trained weights land in:
 
 ```
-~/uroseg/nnUNet/results/<nnunet_task>/nnUNetTrainerDAExt__nnUNetPlans__3d_fullres/fold_<N>/
-├── checkpoint_best.pth
-└── checkpoint_final.pth
+~/uroseg/<name>/<release_tag>/
 ```
 
----
+### 5. Contribute
 
-## Data Storage
-
-All UroSeg data lives under a single configurable root:
-
-| Priority | Method | Value |
-|----------|--------|-------|
-| 1 (highest) | CLI flag | `--data-dir /path/to/data` |
-| 2 | Environment variable | `export UROSEG_DATA=/path/to/data` |
-| 3 (default) | Default | `~/uroseg/` |
-
-```
-~/uroseg/
-└── nnUNet/
-    ├── raw/                        # user training images (imagesTr/, labelsTr/)
-    ├── preprocessed/               # nnU-Net preprocessing cache (auto-created)
-    ├── results/
-    │   ├── r20260101/              # versioned by release date tag
-    │   │   └── Dataset001_Prostate/
-    │   └── r20261001/              # newer release coexists
-    │       └── Dataset001_Prostate/
-    └── exports/                    # downloaded zip archives (removed after extraction)
-```
-
----
-
-## Contributing — Adding a New Organ Model
-
-1. Create `uroseg/resources/models/<organ>.py` per the Python format above
-2. Place training data in `~/uroseg/nnUNet/raw/<nnunet_task>/imagesTr/` and `labelsTr/`
-3. Train: `uroseg train nnunet <organ>`
-4. Archive the trained model: `Dataset###_<Name>_r<YYYYMMDD>.zip`
-5. Upload as a GitHub Release asset and set `weights_url` in the model Python file
-6. Open a pull request
+1. Upload trained weights zip to a GitHub Release
+2. Set `weights_url` in the model class
+3. Open a pull request
