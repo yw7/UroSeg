@@ -66,7 +66,7 @@ def _resample_label_mode(seg_nib: nib.Nifti1Image, ref_nib: nib.Nifti1Image) -> 
     return output
 
 
-def resample_seg_to_image(seg: Image, ref: Image, interpolation: str = 'nearest') -> Image:
+def transform_seg2image(seg: Image, ref: Image, interpolation: str = 'nearest') -> Image:
     seg_nib = nib.Nifti1Image(seg.data.astype(np.int32), seg.affine)
     ref_nib = nib.Nifti1Image(ref.data, ref.affine, ref.header)
 
@@ -88,7 +88,7 @@ def resample_seg_to_image(seg: Image, ref: Image, interpolation: str = 'nearest'
         raise ValueError(f"Unknown interpolation mode: {interpolation!r}")
 
 
-def transform_seg2image(
+def transform_seg2image_file(
     seg: Path | str,
     img: Path | str,
     output: Path | str,
@@ -102,7 +102,7 @@ def transform_seg2image(
         output_path = build_output_path(seg_path, output_path, seg_prefix, seg_suffix)
     seg_img = Image.load(seg_path)
     ref = Image.load(img_path)
-    result = resample_seg_to_image(seg_img, ref, interpolation=interpolation)
+    result = transform_seg2image(seg_img, ref, interpolation=interpolation)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if interpolation == 'linear':
         save_nifti_image(result.data, result.affine, result.header, str(output_path))
@@ -136,7 +136,7 @@ def transform_seg2image_dir(
     img_paths = [p[1] for p in pairs]
     out_paths = [p[2] for p in pairs]
     process_map(
-        functools.partial(transform_seg2image, interpolation=interpolation, overwrite=overwrite),
+        functools.partial(transform_seg2image_file, interpolation=interpolation, overwrite=overwrite),
         seg_paths, img_paths, out_paths,
         max_workers=n_jobs,
         disable=False,
@@ -178,7 +178,7 @@ def main() -> None:
     img_paths = [p[1] for p in pairs]
     out_paths = [p[2] for p in pairs]
     process_map(
-        functools.partial(transform_seg2image, interpolation=args.interpolation, overwrite=args.overwrite),
+        functools.partial(transform_seg2image_file, interpolation=args.interpolation, overwrite=args.overwrite),
         seg_paths, img_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,

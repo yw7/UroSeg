@@ -9,8 +9,8 @@ from pathlib import Path
 from tqdm import tqdm
 
 from uroseg.utils.image import Image, save_nifti_seg
-from uroseg.tools.transform_seg2image import resample_seg_to_image
-from uroseg.tools.largest_component import keep_largest_component
+from uroseg.tools.transform_seg2image import transform_seg2image
+from uroseg.tools.largest_component import largest_component
 
 
 def _extract_release_id(url: str) -> str:
@@ -121,9 +121,9 @@ class SegModel:
         predictor = self.init_predictor(model_dir, fold=fold, device=device)
         seg = self.predict_image(predictor, img_1mm)
         if self.post_largest_component:
-            seg.data = keep_largest_component(seg.data, binarize=True)
+            seg.data = largest_component(seg.data, binarize=True)
         if not iso:
-            seg = resample_seg_to_image(seg, img_orig)
+            seg = transform_seg2image(seg, img_orig)
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / input_path.name
@@ -138,9 +138,9 @@ class SegModel:
             img_1mm = img_orig.as_canonical().resample((1.0, 1.0, 1.0))
             seg = self.predict_image(predictor, img_1mm)
             if self.post_largest_component:
-                seg.data = keep_largest_component(seg.data, binarize=True)
+                seg.data = largest_component(seg.data, binarize=True)
             if not iso:
-                seg = resample_seg_to_image(seg, img_orig)
+                seg = transform_seg2image(seg, img_orig)
             save_nifti_seg(seg.data, seg.affine, seg.header, str(dest_fn(inp)))
 
     def predict_dir(self, input_dir: Path, output_dir: Path,

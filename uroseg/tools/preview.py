@@ -39,7 +39,7 @@ def _parse_label_text(args_list: list[str]) -> dict[int, str]:
     return {int(p.split(':')[0]): p.split(':', 1)[1] for p in args_list}
 
 
-def make_preview(
+def preview(
     img_data: np.ndarray,
     seg_data: np.ndarray | None = None,
     orient: str = 'sag',
@@ -140,7 +140,7 @@ def _build_jpg_path(
     return out_dir / f'{prefix}{stem}{suffix}_{orient}_{sliceloc}.jpg'
 
 
-def preview(
+def preview_file(
     input: Path | str,
     output: Path | str,
     seg: Path | str | None = None,
@@ -158,7 +158,7 @@ def preview(
         output_path = _build_jpg_path(input_path, output_path, out_prefix, out_suffix, orient, sliceloc)
     img = Image.load(input_path)
     seg_data = Image.load(seg).data if seg else None
-    rgb = make_preview(
+    rgb = preview(
         img.data, seg_data,
         orient=orient, sliceloc=sliceloc,
         label_text_right=label_text_right,
@@ -195,7 +195,7 @@ def preview_dir(
     out_paths = [t[2] for t in triples]
     process_map(
         functools.partial(
-            preview,
+            preview_file,
             orient=orient, sliceloc=sliceloc,
             label_text_right=label_text_right, label_text_left=label_text_left,
             overwrite=overwrite,
@@ -277,7 +277,7 @@ def main() -> None:
     seg_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            preview,
+            preview_file,
             orient=args.orient, sliceloc=args.sliceloc,
             label_text_right=ltr or None, label_text_left=ltl or None,
             overwrite=args.overwrite,

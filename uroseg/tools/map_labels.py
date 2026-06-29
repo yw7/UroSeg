@@ -11,7 +11,8 @@ from uroseg.utils.image import Image, save_nifti_seg
 from uroseg.utils.utils import add_common_args, build_pairs, build_output_path, collect_niftis
 
 
-def apply_map(data: np.ndarray, mapping: dict, keep_unmapped: bool = False) -> np.ndarray:
+def map_labels(data: np.ndarray, mapping: dict, keep_unmapped: bool = False) -> np.ndarray:
+    """Remap label IDs in a segmentation array."""
     if keep_unmapped:
         result = data.copy()
         for src, dst in mapping.items():
@@ -24,13 +25,10 @@ def apply_map(data: np.ndarray, mapping: dict, keep_unmapped: bool = False) -> n
 
 
 def _resolve_companion(companion_path: str | None, input_path: Path) -> Path | None:
-    """Given a companion path (file or folder), return the specific file that
-    corresponds to *input_path* (matched by filename when companion is a folder)."""
     if companion_path is None:
         return None
     p = Path(companion_path)
     if p.is_dir():
-        # Match by stem (filename without extension)
         candidates = collect_niftis(p)
         for c in candidates:
             if c.name == input_path.name:
@@ -39,7 +37,7 @@ def _resolve_companion(companion_path: str | None, input_path: Path) -> Path | N
     return p
 
 
-def map_labels(
+def map_labels_file(
     input: Path | str,
     output: Path | str,
     map: dict,
@@ -55,16 +53,14 @@ def map_labels(
         output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
     int_map = {int(k): int(v) for k, v in map.items()}
     img = Image.load(input_path)
-    out_data = apply_map(img.data, int_map, keep_unmapped=keep_unmapped)
+    out_data = map_labels(img.data, int_map, keep_unmapped=keep_unmapped)
 
-    # --update-seg: fill zeros in output with non-zero values from companion seg
     companion = _resolve_companion(str(update_seg) if update_seg else None, input_path)
     if companion is not None:
         seg_img = Image.load(companion)
         mask = out_data == 0
         out_data[mask] = seg_img.data[mask]
 
-    # --update-from-seg: overwrite output where companion seg is non-zero
     companion_from = _resolve_companion(str(update_from_seg) if update_from_seg else None, input_path)
     if companion_from is not None:
         from_img = Image.load(companion_from)
@@ -94,7 +90,7 @@ def map_labels_dir(
     out_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            map_labels,
+            map_labels_file,
             map=int_map,
             keep_unmapped=keep_unmapped,
             update_seg=str(update_seg) if update_seg else None,
@@ -136,7 +132,6 @@ def main() -> None:
     add_common_args(parser)
     args = parser.parse_args()
 
-    # Parse --map argument: JSON file or direct key:value pairs
     map_list = args.map
     if not map_list:
         mapping: dict[int, int] = {}
@@ -154,7 +149,7 @@ def main() -> None:
     out_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            map_labels,
+            map_labels_file,
             map=mapping,
             keep_unmapped=args.keep_unmapped,
             update_seg=args.update_seg,

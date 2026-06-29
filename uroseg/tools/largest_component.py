@@ -66,13 +66,13 @@ def _largest_component_for_label(
     return largest_mask
 
 
-def keep_largest_component(
+def largest_component(
     data: np.ndarray,
     labels: list[int] | None = None,
     dilate: int = 0,
     binarize: bool = False,
 ) -> np.ndarray:
-    """Keep only the largest connected component per label (or globally when binarize=True).
+    """Keep only the largest connected component per label (in-memory).
 
     Parameters
     ----------
@@ -81,8 +81,7 @@ def keep_largest_component(
     labels:
         Label IDs to process.  Defaults to all non-zero values.
     dilate:
-        Dilation iterations applied before CC analysis (see
-        ``_largest_component_for_label``).
+        Dilation iterations applied before CC analysis.
     binarize:
         Treat all non-zero voxels as one region; find the single largest CC
         across all labels, then restore original label values within that mask.
@@ -101,7 +100,7 @@ def keep_largest_component(
     return result
 
 
-def largest_component(
+def largest_component_file(
     input: Path | str,
     output: Path | str,
     labels: list[int] | None = None,
@@ -115,7 +114,7 @@ def largest_component(
     if not output_path.suffix:
         output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
     img = Image.load(input_path)
-    img.data = keep_largest_component(img.data, labels=labels, dilate=dilate, binarize=binarize)
+    img.data = largest_component(img.data, labels=labels, dilate=dilate, binarize=binarize)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_seg(img.data, img.affine, img.header, str(output_path))
     return output_path
@@ -137,7 +136,7 @@ def largest_component_dir(
     out_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            largest_component,
+            largest_component_file,
             labels=labels, dilate=dilate, binarize=binarize, overwrite=overwrite,
         ),
         in_paths, out_paths,
@@ -171,7 +170,7 @@ def main() -> None:
     out_paths = [p[1] for p in pairs]
     process_map(
         functools.partial(
-            largest_component,
+            largest_component_file,
             labels=args.labels, dilate=args.dilate, binarize=args.binarize, overwrite=args.overwrite,
         ),
         in_paths, out_paths,

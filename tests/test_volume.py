@@ -16,33 +16,33 @@ def _make_seg(tmp_path: Path, data: np.ndarray, zooms=(2.0, 2.0, 2.0), name='seg
 
 
 def test_volume_single_label(tmp_path):
-    from uroseg.tools.volume import volume
+    from uroseg.tools.volume import volume_file
     data = np.zeros((4, 4, 4), dtype=np.uint8)
     data[0:2, 0:2, 0:2] = 1  # 8 voxels, each 2×2×2 = 8 mm³ → total 64 mm³
     seg = _make_seg(tmp_path, data)
-    result = volume(seg, {'bladder': 1})
+    result = volume_file(seg, {'bladder': 1})
     assert 'bladder' in result
     assert abs(result['bladder'] - 64.0) < 1e-6
 
 
 def test_volume_skips_background(tmp_path):
-    from uroseg.tools.volume import volume
+    from uroseg.tools.volume import volume_file
     data = np.zeros((4, 4, 4), dtype=np.uint8)
     data[1, 1, 1] = 1
     seg = _make_seg(tmp_path, data)
-    result = volume(seg, {'background': 0, 'bladder': 1})
+    result = volume_file(seg, {'background': 0, 'bladder': 1})
     assert 'background' not in result
     assert 'bladder' in result
 
 
 def test_volume_multi_label(tmp_path):
-    from uroseg.tools.volume import volume
+    from uroseg.tools.volume import volume_file
     data = np.zeros((4, 4, 4), dtype=np.uint8)
     data[0, 0, 0] = 1  # 1 voxel
     data[1, 1, 1] = 2  # 1 voxel
     data[2, 2, 2] = 3  # 1 voxel
     seg = _make_seg(tmp_path, data, zooms=(1.0, 1.0, 1.0))
-    result = volume(seg, {'prostate': [1, 2, 3], 'prostate_tz': 2})
+    result = volume_file(seg, {'prostate': [1, 2, 3], 'prostate_tz': 2})
     # prostate includes labels 1,2,3 → 3 voxels × 1mm³ = 3 mm³
     assert abs(result['prostate'] - 3.0) < 1e-6
     # prostate_tz is label 2 → 1 voxel × 1mm³ = 1 mm³
@@ -50,12 +50,24 @@ def test_volume_multi_label(tmp_path):
 
 
 def test_volume_1mm_isotropic(tmp_path):
-    from uroseg.tools.volume import volume
+    from uroseg.tools.volume import volume_file
     data = np.zeros((10, 10, 10), dtype=np.uint8)
     data[2:5, 2:5, 2:5] = 1  # 27 voxels @ 1mm³
     seg = _make_seg(tmp_path, data, zooms=(1.0, 1.0, 1.0))
-    result = volume(seg, {'region': 1})
+    result = volume_file(seg, {'region': 1})
     assert abs(result['region'] - 27.0) < 1e-6
+
+
+def test_volume_inmemory(tmp_path):
+    from uroseg.tools.volume import volume
+    from uroseg.utils.image import Image
+    data = np.zeros((4, 4, 4), dtype=np.uint8)
+    data[0:2, 0:2, 0:2] = 1  # 8 voxels, each 2×2×2 = 8 mm³ → total 64 mm³
+    seg_path = _make_seg(tmp_path, data)
+    img = Image.load(seg_path)
+    result = volume(img, {'bladder': 1})
+    assert 'bladder' in result
+    assert abs(result['bladder'] - 64.0) < 1e-6
 
 
 def test_volume_dir_creates_csv(tmp_path):
@@ -137,7 +149,6 @@ def test_volume_cli_single_file_to_csv(tmp_path):
 
 def test_volume_public_api():
     import uroseg
-    assert hasattr(uroseg, 'volume')
-    assert hasattr(uroseg, 'volume_dir')
-    assert callable(uroseg.volume)
-    assert callable(uroseg.volume_dir)
+    for name in ['volume', 'volume_file', 'volume_dir']:
+        assert hasattr(uroseg, name), f"uroseg.{name} missing"
+        assert callable(getattr(uroseg, name))

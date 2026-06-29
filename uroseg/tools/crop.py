@@ -10,7 +10,12 @@ from uroseg.utils.image import Image, save_nifti_image
 from uroseg.utils.utils import add_common_args, collect_niftis, build_output_path
 
 
-def crop(
+def crop(img: Image, seg: Image, margin: int = 0) -> Image:
+    """Crop an image to the bounding box of a segmentation (in-memory)."""
+    return img.crop_to_seg(seg, margin=margin)
+
+
+def crop_file(
     input: Path | str,
     seg: Path | str,
     output: Path | str,
@@ -22,9 +27,7 @@ def crop(
     input_path, seg_path, output_path = Path(input), Path(seg), Path(output)
     if not output_path.suffix:
         output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
-    img = Image.load(input_path)
-    seg_img = Image.load(seg_path)
-    cropped = img.crop_to_seg(seg_img, margin=margin)
+    cropped = crop(Image.load(input_path), Image.load(seg_path), margin=margin)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_image(cropped.data, cropped.affine, cropped.header, str(output_path))
     return output_path
@@ -55,7 +58,7 @@ def crop_dir(
     seg_paths = [t[1] for t in triples]
     out_paths = [t[2] for t in triples]
     process_map(
-        functools.partial(crop, margin=margin, overwrite=overwrite),
+        functools.partial(crop_file, margin=margin, overwrite=overwrite),
         img_paths, seg_paths, out_paths,
         max_workers=n_jobs,
         disable=False,
@@ -95,7 +98,7 @@ def main() -> None:
     seg_paths = [t[1] for t in triples]
     out_paths = [t[2] for t in triples]
     process_map(
-        functools.partial(crop, margin=args.margin, overwrite=args.overwrite),
+        functools.partial(crop_file, margin=args.margin, overwrite=args.overwrite),
         img_paths, seg_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,

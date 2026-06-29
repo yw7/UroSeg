@@ -9,7 +9,7 @@ from uroseg.utils.image import Image
 from uroseg.utils.utils import add_common_args, build_pairs, build_output_path
 
 
-def cpdir(
+def cpdir_file(
     input: Path | str,
     output: Path | str,
     out_suffix: str = "",
@@ -37,7 +37,7 @@ def cpdir_dir(
     in_paths = [p[0] for p in pairs]
     out_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(cpdir, overwrite=overwrite),
+        functools.partial(cpdir_file, overwrite=overwrite),
         in_paths, out_paths,
         max_workers=n_jobs,
         disable=False,
@@ -60,9 +60,9 @@ def main() -> None:
     in_paths = [p[0] for p in pairs]
     out_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(cpdir, overwrite=args.overwrite),
+        functools.partial(cpdir_file, overwrite=args.overwrite),
         in_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,
-        desc='uroseg cpdir',
+        desc='uroseg cpdir_file',
     )

@@ -9,7 +9,14 @@ from uroseg.utils.image import Image, save_nifti_image
 from uroseg.utils.utils import add_common_args, build_pairs, build_output_path
 
 
-def resample(
+def resample(img: Image, mm: float | list[float] = 1.0) -> Image:
+    """Resample an Image to target voxel spacing (in-memory)."""
+    mm_list = [mm] if isinstance(mm, (int, float)) else list(mm)
+    mm_tuple = tuple(mm_list if len(mm_list) == 3 else [mm_list[0]] * 3)
+    return img.resample(mm_tuple)
+
+
+def resample_file(
     input: Path | str,
     output: Path | str,
     mm: float | list[float] = 1.0,
@@ -20,10 +27,7 @@ def resample(
     input_path, output_path = Path(input), Path(output)
     if not output_path.suffix:
         output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
-    mm_list = [mm] if isinstance(mm, (int, float)) else list(mm)
-    mm_tuple = tuple(mm_list if len(mm_list) == 3 else [mm_list[0]] * 3)
-    img = Image.load(input_path)
-    img = img.resample(mm_tuple)
+    img = resample(Image.load(input_path), mm=mm)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_image(img.data, img.affine, img.header, str(output_path))
     return output_path
@@ -42,7 +46,7 @@ def resample_dir(
     in_paths = [p[0] for p in pairs]
     out_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(resample, mm=mm, overwrite=overwrite),
+        functools.partial(resample_file, mm=mm, overwrite=overwrite),
         in_paths, out_paths,
         max_workers=n_jobs,
         disable=False,
@@ -69,7 +73,7 @@ def main() -> None:
     in_paths = [p[0] for p in pairs]
     out_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(resample, mm=args.mm, overwrite=args.overwrite),
+        functools.partial(resample_file, mm=args.mm, overwrite=args.overwrite),
         in_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,

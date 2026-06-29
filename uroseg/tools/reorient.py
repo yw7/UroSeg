@@ -9,7 +9,12 @@ from uroseg.utils.image import Image, save_nifti_image
 from uroseg.utils.utils import add_common_args, build_pairs, build_output_path
 
 
-def reorient(
+def reorient(img: Image) -> Image:
+    """Reorient an Image to RAS canonical orientation (in-memory)."""
+    return img.as_canonical()
+
+
+def reorient_file(
     input: Path | str,
     output: Path | str,
     out_suffix: str = "_reoriented",
@@ -19,8 +24,7 @@ def reorient(
     input_path, output_path = Path(input), Path(output)
     if not output_path.suffix:
         output_path = build_output_path(input_path, output_path, out_prefix, out_suffix)
-    img = Image.load(input_path)
-    img = img.as_canonical()
+    img = reorient(Image.load(input_path))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_nifti_image(img.data, img.affine, img.header, str(output_path))
     return output_path
@@ -38,7 +42,7 @@ def reorient_dir(
     in_paths = [p[0] for p in pairs]
     out_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(reorient, overwrite=overwrite),
+        functools.partial(reorient_file, overwrite=overwrite),
         in_paths, out_paths,
         max_workers=n_jobs,
         disable=False,
@@ -61,7 +65,7 @@ def main() -> None:
     in_paths = [p[0] for p in pairs]
     out_paths = [p[1] for p in pairs]
     process_map(
-        functools.partial(reorient, overwrite=args.overwrite),
+        functools.partial(reorient_file, overwrite=args.overwrite),
         in_paths, out_paths,
         max_workers=args.max_workers,
         disable=args.quiet,

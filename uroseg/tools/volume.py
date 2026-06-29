@@ -10,13 +10,12 @@ from uroseg.utils.image import Image
 from uroseg.utils.utils import add_common_args, collect_niftis
 
 
-def volume(seg: Path | str, labels: dict) -> dict[str, float]:
-    """Compute volume in mm³ for each named label in a segmentation file.
+def volume(img: Image, labels: dict) -> dict[str, float]:
+    """Compute volume in mm³ for each named label from an in-memory Image.
 
     Skips background (value 0). Supports multi-label entries:
     ``{"prostate": [1, 2, 3]}`` counts voxels where value is any of 1, 2, 3.
     """
-    img = Image.load(Path(seg))
     zooms = img.header.get_zooms()[:3]
     voxel_vol = float(zooms[0]) * float(zooms[1]) * float(zooms[2])
 
@@ -29,6 +28,11 @@ def volume(seg: Path | str, labels: dict) -> dict[str, float]:
         result[name] = int(np.sum(mask)) * voxel_vol
 
     return result
+
+
+def volume_file(seg: Path | str, labels: dict) -> dict[str, float]:
+    """Compute volume in mm³ for each named label in a segmentation file."""
+    return volume(Image.load(Path(seg)), labels)
 
 
 def volume_dir(
@@ -49,7 +53,7 @@ def volume_dir(
     inputs = collect_niftis(Path(input_dir))
     rows: list[dict] = []
     for inp in tqdm(inputs, desc='uroseg volume', disable=quiet):
-        vols = volume(inp, labels)
+        vols = volume_file(inp, labels)
         rows.append({'filename': inp.name.removesuffix('.gz').removesuffix('.nii'), **vols})
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +101,7 @@ def main() -> None:
             sys.exit(1)
         volume_dir(seg_path, args.out, labels, overwrite=args.overwrite, quiet=args.quiet)
     else:
-        vols = volume(seg_path, labels)
+        vols = volume_file(seg_path, labels)
         if args.out:
             _write_csv([{'filename': seg_path.name.removesuffix('.gz').removesuffix('.nii'), **vols}], Path(args.out))
         else:
