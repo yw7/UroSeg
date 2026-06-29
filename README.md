@@ -1,9 +1,8 @@
 # UroSeg
 
-Automated segmentation of urological anatomy from MRI/CT. Built on [nnU-Net](https://github.com/MIC-DKFZ/nnUNet).
+Automated segmentation of urological anatomy from MRI/CT.
 
-<!-- Replace with a real preview: uroseg preview --img scan.nii.gz --seg seg.nii.gz --out docs/ -->
-![Sample segmentation](docs/preview.jpg)
+<img width="488" height="415" alt="Image" src="https://github.com/user-attachments/assets/1ccad12b-7dc2-45bc-8399-ccecb591437b" />
 
 ---
 
@@ -11,8 +10,7 @@ Automated segmentation of urological anatomy from MRI/CT. Built on [nnU-Net](htt
 
 | Model | Modality | Labels |
 |-------|----------|--------|
-| `prostate` | MRI T2 | whole prostate (1+2+3), transition zone (2), peripheral zone (3) |
-| `bladder` | CT | bladder (1) |
+| `prostate` | CT/MRI | whole prostate (1+2+3), transition zone (2), peripheral zone (3) |
 
 ---
 
