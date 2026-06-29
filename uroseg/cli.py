@@ -52,6 +52,10 @@ def main() -> None:
         sys.argv = sys.argv[:1] + sys.argv[2:]
         from uroseg.tools.transform_seg2image import main as run
         run()
+    elif cmd == 'volume':
+        sys.argv = sys.argv[:1] + sys.argv[2:]
+        from uroseg.tools.volume import main as run
+        run()
     elif cmd.startswith('-'):
         print(f"Unknown option: {cmd}. Run 'uroseg --help' for help.", file=sys.stderr)
         sys.exit(1)

@@ -10,6 +10,7 @@ _COMMANDS = {
     'preview':             'Generate JPG slice preview',
     'transform_seg2image': 'Resample segmentation to reference image space',
     'cpdir':               'Copy NIfTI files with optional renaming',
+    'volume':              'Compute label volumes in mm³',
     'install':             'Download model weights',
     'train nnunet':        'Train with nnU-Net + AugLab',
 }

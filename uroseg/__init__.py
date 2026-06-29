@@ -21,6 +21,7 @@ from uroseg.tools.largest_component import largest_component
 from uroseg.tools.reorient import reorient
 from uroseg.tools.transform_seg2image import transform_seg2image
 from uroseg.tools.cpdir import cpdir
+from uroseg.tools.volume import volume
 
 # Tools — directory (multiprocessing)
 from uroseg.tools.map_labels import map_labels_dir
@@ -31,6 +32,7 @@ from uroseg.tools.largest_component import largest_component_dir
 from uroseg.tools.reorient import reorient_dir
 from uroseg.tools.transform_seg2image import transform_seg2image_dir
 from uroseg.tools.cpdir import cpdir_dir
+from uroseg.tools.volume import volume_dir
 
 try:
     __version__ = version("uroseg")
@@ -49,4 +51,5 @@ __all__ = [
     'reorient', 'reorient_dir',
     'transform_seg2image', 'transform_seg2image_dir',
     'cpdir', 'cpdir_dir',
+    'volume', 'volume_dir',
 ]
