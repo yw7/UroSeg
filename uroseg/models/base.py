@@ -76,7 +76,7 @@ def add_inference_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--device', '-d', default='cuda', choices=['cuda', 'cpu', 'mps'])
     parser.add_argument('--iso', action='store_true', default=False,
                         help='Leave output in 1mm canonical space (default: resample back to input)')
-    parser.add_argument('--out-suffix', default='_seg', help='Output filename suffix')
+    parser.add_argument('--out-suffix', default='', help='Output filename suffix')
     parser.add_argument('--out-prefix', default='', help='Output filename prefix')
     parser.add_argument('--data-dir', default=None, help=data_dir_help())
     add_common_args(parser)

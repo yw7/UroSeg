@@ -31,7 +31,7 @@ def test_add_inference_args_defaults():
     args = parser.parse_args(['img.nii.gz', 'out/'])
     assert args.fold == 0
     assert args.device == 'cuda'
-    assert args.out_suffix == '_seg'
+    assert args.out_suffix == ''
     assert args.out_prefix == ''
     assert args.overwrite is False
     assert args.quiet is False
