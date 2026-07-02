@@ -71,7 +71,10 @@ def add_inference_args(parser: argparse.ArgumentParser) -> None:
     """Add standard inference args to a parser (used by each model's CLI)."""
     from uroseg.utils.utils import add_common_args, data_dir_help
     parser.add_argument('img', help='Input image file or folder')
-    parser.add_argument('out', nargs='?', default='.', help='Output folder (default: current directory)')
+    parser.add_argument('out', nargs='?', default=None,
+                        help='Output file or folder. '
+                             'Default for single-file input: <stem>_<model>.nii.gz next to input. '
+                             'Default for folder input: current directory.')
     parser.add_argument('--fold', '-f', type=int, default=0, help='nnU-Net fold (default: 0)')
     parser.add_argument('--device', '-d', default='cuda', choices=['cuda', 'cpu', 'mps'])
     parser.add_argument('--iso', action='store_true', default=False,
@@ -155,9 +158,42 @@ class SegModel:
         self._predict_batch(predictor, inputs, output_dir, iso,
                             dest_fn=lambda inp: output_dir / inp.name)
 
+    def _resolve_output(self, args, inputs: list) -> tuple:
+        """Return (dest_fn, display_path) based on input/output args."""
+        from uroseg.utils.utils import build_output_path
+        single = Path(args.img).is_file()
+        out_arg = args.out
+
+        if out_arg is None and single:
+            inp = inputs[0]
+            name = inp.name
+            for ext in ('.nii.gz', '.nii'):
+                if name.endswith(ext):
+                    name = name[:-len(ext)]
+                    break
+            out_file = inp.parent / f'{args.out_prefix}{name}{args.out_suffix}_{self.name}.nii.gz'
+            return (lambda _: out_file), out_file
+
+        if single and out_arg is not None and not Path(out_arg).is_dir():
+            s = out_arg
+            if s.endswith('.nii') and not s.endswith('.nii.gz'):
+                s += '.gz'
+            elif not s.endswith('.nii.gz'):
+                s += '.nii.gz'
+            out_file = Path(s)
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+            return (lambda _: out_file), out_file
+
+        out_dir = Path(out_arg if out_arg is not None else '.')
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return (
+            lambda inp: build_output_path(inp, out_dir, args.out_prefix, args.out_suffix),
+            out_dir,
+        )
+
     def predict_cli(self, args) -> None:
-        """CLI batch prediction: auto-install, tqdm progress, predictor init once."""
-        from uroseg.utils.utils import collect_niftis, build_output_path, resolve_data_path
+        """CLI prediction: auto-install, tqdm progress, predictor init once."""
+        from uroseg.utils.utils import collect_niftis, resolve_data_path
         data_path = resolve_data_path(args.data_dir)
         try:
             model_dir = _find_model_dir(self.name, data_path)
@@ -169,20 +205,17 @@ class SegModel:
         if not inputs:
             print(f"No NIfTI files found in {args.img}", file=sys.stderr)
             sys.exit(1)
-        out_dir = Path(args.out)
-        out_dir.mkdir(parents=True, exist_ok=True)
+        dest_fn, display_out = self._resolve_output(args, inputs)
         predictor = self.init_predictor(model_dir, fold=args.fold, device=args.device)
-        filtered = [inp for inp in inputs
-                    if args.overwrite or not build_output_path(
-                        inp, out_dir, args.out_prefix, args.out_suffix).exists()]
+        filtered = [inp for inp in inputs if args.overwrite or not dest_fn(inp).exists()]
         self._predict_batch(
             predictor,
             tqdm(filtered, desc=f'uroseg {self.name}', disable=args.quiet),
-            out_dir, args.iso,
-            dest_fn=lambda inp: build_output_path(inp, out_dir, args.out_prefix, args.out_suffix),
+            Path('.'), args.iso,
+            dest_fn=dest_fn,
         )
         if not args.quiet:
-            print(f"Segmentations saved to {out_dir}")
+            print(f"Segmentation{'s' if len(inputs) > 1 else ''} saved to {display_out}")
 
     @classmethod
     def cli_main(cls) -> None:

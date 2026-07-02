@@ -15,13 +15,13 @@ def test_add_inference_args_positional():
     assert args.out == 'out/'
 
 
-def test_add_inference_args_out_defaults_to_dot():
+def test_add_inference_args_out_defaults_to_none():
     from uroseg.models.base import add_inference_args
     parser = argparse.ArgumentParser()
     add_inference_args(parser)
     args = parser.parse_args(['img.nii.gz'])
     assert args.img == 'img.nii.gz'
-    assert args.out == '.'
+    assert args.out is None
 
 
 def test_add_inference_args_defaults():
@@ -180,6 +180,64 @@ def test_predict_cli_auto_installs_if_missing(tmp_path):
         model.predict_cli(args)
 
     assert len(installed) == 1
+
+
+def test_predict_cli_single_file_no_out_auto_names(tmp_path):
+    """Single file + no out arg → <stem>_<model>.nii.gz next to input."""
+    import numpy as np
+    import nibabel as nib
+    from uroseg.models.prostate import Prostate
+    from uroseg.utils.image import Image
+
+    inp = tmp_path / 'scan.nii.gz'
+    nib.save(nib.Nifti1Image(np.zeros((4, 4, 4), dtype=np.float32), np.eye(4)), str(inp))
+
+    args = argparse.Namespace(
+        img=str(inp), out=None,
+        fold=0, device='cpu', out_suffix='', out_prefix='',
+        data_dir=str(tmp_path), overwrite=True, quiet=True,
+        max_workers=1, iso=False,
+    )
+    fake_seg = np.zeros((4, 4, 4), dtype=np.uint8)
+    model = Prostate()
+
+    with patch.object(model, 'init_predictor', return_value=MagicMock()), \
+         patch.object(model, 'predict_image',
+                      return_value=Image(fake_seg, np.eye(4),
+                                         nib.Nifti1Image(fake_seg, np.eye(4)).header)), \
+         patch('uroseg.models.base._find_model_dir', return_value=tmp_path):
+        model.predict_cli(args)
+
+    assert (tmp_path / 'scan_prostate.nii.gz').exists()
+
+
+def test_predict_cli_single_file_out_adds_extension(tmp_path):
+    """Single file + out without .nii.gz → extension appended."""
+    import numpy as np
+    import nibabel as nib
+    from uroseg.models.prostate import Prostate
+    from uroseg.utils.image import Image
+
+    inp = tmp_path / 'scan.nii.gz'
+    nib.save(nib.Nifti1Image(np.zeros((4, 4, 4), dtype=np.float32), np.eye(4)), str(inp))
+
+    args = argparse.Namespace(
+        img=str(inp), out=str(tmp_path / 'result'),
+        fold=0, device='cpu', out_suffix='', out_prefix='',
+        data_dir=str(tmp_path), overwrite=True, quiet=True,
+        max_workers=1, iso=False,
+    )
+    fake_seg = np.zeros((4, 4, 4), dtype=np.uint8)
+    model = Prostate()
+
+    with patch.object(model, 'init_predictor', return_value=MagicMock()), \
+         patch.object(model, 'predict_image',
+                      return_value=Image(fake_seg, np.eye(4),
+                                         nib.Nifti1Image(fake_seg, np.eye(4)).header)), \
+         patch('uroseg.models.base._find_model_dir', return_value=tmp_path):
+        model.predict_cli(args)
+
+    assert (tmp_path / 'result.nii.gz').exists()
 
 
 def test_load_model_module_called_for_valid_organ():
